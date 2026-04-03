@@ -92,6 +92,7 @@ namespace PhotoViewer
         /// <summary>
         /// Handles chevron click to expand/collapse folder trees.
         /// Only the chevron triggers expand/collapse; clicking the row selects it.
+        /// Refreshes subfolders from disk before expanding to pick up external changes.
         /// </summary>
         private void Chevron_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
@@ -112,7 +113,19 @@ namespace PhotoViewer
 
             if (treeViewItem != null)
             {
-                treeViewItem.IsExpanded = !treeViewItem.IsExpanded;
+                bool expanding = !treeViewItem.IsExpanded;
+                if (expanding)
+                {
+                    if (treeViewItem.DataContext is PhotoViewer.Models.FolderNode node)
+                    {
+                        node.RefreshSubFoldersRecursive();
+                    }
+                    else if (treeViewItem.DataContext is PhotoViewer.ViewModels.FolderSourceViewModel folderSource)
+                    {
+                        folderSource.RefreshTree();
+                    }
+                }
+                treeViewItem.IsExpanded = expanding;
             }
         }
 

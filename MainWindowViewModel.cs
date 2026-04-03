@@ -496,6 +496,11 @@ namespace PhotoViewer.ViewModels
 
         private void ExecuteRemoveSourceCommand(object? parameter)
         {
+            if (parameter is FolderSourceViewModel fsv)
+            {
+                fsv.Dispose();
+            }
+
             if (parameter is not SourceItemViewModel and not FolderSourceViewModel) return;
 
             if (SelectedSource == parameter)

@@ -380,6 +380,8 @@
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <ContentPresenter Content="{StaticResource IconFolder}" Width="18" Height="18" Margin="0,0,8,0" />
                                         <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="13" />
+                                        <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="6,0,0,0"
+                                                   FontSize="11" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
                                     </StackPanel>
                                 </DockPanel>
                                 <HierarchicalDataTemplate.Triggers>

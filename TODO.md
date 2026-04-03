@@ -39,10 +39,11 @@ This To-Do list outlines the development plan for adding a unified gallery and m
 - [X] Replace flat source list with expandable folder tree for local folders.
 - [X] Folder tree with right-aligned chevrons (click to expand/collapse, single click to select).
 - [X] Chevron state: down (collapsed) → up (expanded) for nested folders.
-- [X] Photo counts displayed on all sources (Gallery, Favorites, cloud accounts, subfolders).
+- [X] Photo counts displayed on all sources (Gallery, Favorites, cloud accounts, subfolders, folder roots).
 - [X] Photo caching — instant display on revisit, no re-scanning.
 - [X] Staleness detection (5-minute timeout + missing file sampling).
 - [X] `RangeObservableCollection` for atomic batch display (zero population animation).
+- [X] Real-time folder tree updates via `FileSystemWatcher` — new/deleted/renamed folders appear instantly without clicks or restart.
 
 ## Milestone 6: UI Polish and Refinements
 - [X] Add "Gallery" source that aggregates photos from all other sources.

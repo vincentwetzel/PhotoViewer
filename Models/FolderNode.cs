@@ -89,6 +89,55 @@ namespace PhotoViewer.Models
         {
             SubFolders.Clear();
             LoadSubFolderShallow();
+            PhotoCount = CountPhotosInFolder();
+        }
+
+        /// <summary>
+        /// Re-scans the directory for added/removed subfolders and updates the photo count.
+        /// Used to pick up external changes (e.g., folders added/deleted outside the app).
+        /// </summary>
+        public void RefreshSubFolders()
+        {
+            // Get current disk subfolders
+            var diskFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                foreach (var dir in Directory.EnumerateDirectories(FullName))
+                    diskFolders.Add(dir);
+            }
+            catch { }
+
+            // Remove nodes that no longer exist on disk
+            var toRemove = SubFolders.Where(n => !diskFolders.Contains(n.FullName)).ToList();
+            foreach (var node in toRemove)
+                SubFolders.Remove(node);
+
+            // Add new folders that exist on disk but not in our tree
+            foreach (var diskDir in diskFolders)
+            {
+                if (!SubFolders.Any(n => n.FullName.Equals(diskDir, StringComparison.OrdinalIgnoreCase)))
+                {
+                    var newNode = new FolderNode(diskDir, this);
+                    SubFolders.Add(newNode);
+                }
+            }
+
+            HasSubFolders = SubFolders.Count > 0;
+            PhotoCount = CountPhotosInFolder();
+        }
+
+        /// <summary>
+        /// Recursively refreshes this folder and ALL descendants, not just expanded ones.
+        /// Used to pick up external changes at all levels of the tree.
+        /// </summary>
+        public void RefreshSubFoldersRecursive()
+        {
+            RefreshSubFolders();
+            // Recurse into ALL children, expanded or not — EnumerateDirectories is fast
+            foreach (var sub in SubFolders.ToList()) // ToList to allow modification during iteration
+            {
+                sub.RefreshSubFoldersRecursive();
+            }
         }
 
         /// <summary>

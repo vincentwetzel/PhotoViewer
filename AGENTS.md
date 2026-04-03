@@ -6,6 +6,19 @@ This document breaks down the application into its primary logical components, o
 
 ---
 
+## Development Workflow Rules (STRICT)
+
+### No Automatic Commits or Pushes
+
+**NEVER automatically run `git commit` or `git push` after making code changes.**
+
+- All code changes must be reviewed by the user before being committed.
+- Wait for explicit instruction from the user before running any git operations (`git add`, `git commit`, `git push`).
+- This rule applies to all agents — human or AI — working on this project.
+- Violations of this policy will be rejected.
+
+---
+
 ## Theme Control Policy (STRICT)
 
 **Theme is controlled in exactly ONE place: `ThemeManager.ApplyTheme()`.** This is the final say for all color decisions.
@@ -98,6 +111,8 @@ This agent manages the expandable folder tree hierarchy for local folder sources
 - When a subfolder is selected, aggregate photo paths from that folder and all its descendants.
 - When the root is selected, aggregate photo paths from the entire folder tree.
 - Each node's `RootSource` property links it back to its owning `FolderSourceViewModel` for reliable selection handling.
+- **Real-time tree updates**: `FolderSourceViewModel` uses a `FileSystemWatcher` on the root path (with `IncludeSubdirectories = true`) to detect folder create/delete/rename events. Changes are debounced (500ms) and trigger a recursive tree refresh (`RefreshSubFoldersRecursive`) so new/removed folders appear instantly — no clicks or restart needed.
+- `FolderSourceViewModel` implements `IDisposable` — watcher is cleaned up when a source is removed.
 - All color values use `{DynamicResource}` — no hardcoded theme colors.
 
 ---

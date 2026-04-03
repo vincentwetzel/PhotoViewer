@@ -2,15 +2,18 @@ using PhotoViewer.Models;
 using PhotoViewer.Services;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.CompilerServices;
+using System.Timers;
 
 namespace PhotoViewer.ViewModels
 {
     /// <summary>
     /// Represents a local folder source in the navigation tree.
     /// Exposes a tree of FolderNode items for expand/collapse browsing.
+    /// Watches the file system for changes and refreshes the tree in real-time.
     /// </summary>
-    public class FolderSourceViewModel : INotifyPropertyChanged
+    public class FolderSourceViewModel : INotifyPropertyChanged, IDisposable
     {
         public LocalFolderProvider Provider { get; }
         public FolderNode Root { get; }
@@ -21,6 +24,14 @@ namespace PhotoViewer.ViewModels
         /// Total photo count across all folders and subfolders.
         /// </summary>
         public int PhotoCount => Root.TotalPhotoCount;
+
+        /// <summary>
+        /// Refreshes the folder tree recursively, picking up any folders added/deleted on disk.
+        /// </summary>
+        public void RefreshTree()
+        {
+            Root.RefreshSubFoldersRecursive();
+        }
 
         private object? _selectedItem;
         /// <summary>
@@ -43,6 +54,63 @@ namespace PhotoViewer.ViewModels
             // Re-load subfolders now that RootSource is set, so children inherit it
             Root.LoadSubFolders();
             DisplayName = System.IO.Path.GetFileName(provider.SourceName);
+
+            // Start watching for file system changes
+            StartFileSystemWatcher();
+        }
+
+        private FileSystemWatcher? _watcher;
+        private readonly System.Timers.Timer _refreshTimer = new(500) { AutoReset = false };
+        private volatile bool _pendingRefresh;
+
+        private void StartFileSystemWatcher()
+        {
+            if (!Directory.Exists(Provider.SourceName)) return;
+
+            _watcher = new FileSystemWatcher(Provider.SourceName)
+            {
+                NotifyFilter = NotifyFilters.DirectoryName,
+                IncludeSubdirectories = true,
+                EnableRaisingEvents = true
+            };
+
+            _watcher.Created += OnFolderChanged;
+            _watcher.Deleted += OnFolderChanged;
+            _watcher.Renamed += OnFolderChanged;
+
+            _refreshTimer.Elapsed += OnRefreshTimer;
+        }
+
+        private void OnFolderChanged(object sender, FileSystemEventArgs e)
+        {
+            _pendingRefresh = true;
+            // Debounce: restart timer on every event so we batch rapid-fire changes
+            _refreshTimer.Stop();
+            _refreshTimer.Start();
+        }
+
+        private void OnRefreshTimer(object? sender, ElapsedEventArgs e)
+        {
+            if (!_pendingRefresh) return;
+            _pendingRefresh = false;
+
+            // Refresh on the UI thread
+            System.Windows.Application.Current.Dispatcher.Invoke(() => RefreshTree());
+        }
+
+        public void Dispose()
+        {
+            if (_watcher != null)
+            {
+                _watcher.Created -= OnFolderChanged;
+                _watcher.Deleted -= OnFolderChanged;
+                _watcher.Renamed -= OnFolderChanged;
+                _watcher.EnableRaisingEvents = false;
+                _watcher.Dispose();
+                _watcher = null;
+            }
+            _refreshTimer.Stop();
+            _refreshTimer.Dispose();
         }
 
         /// <summary>
