@@ -1,0 +1,14 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on Keep a Changelog,
+and this project adheres to Semantic Versioning.
+
+## [Unreleased]
+
+### Added
+- Initial project documentation: `README.md`, `AGENTS.md`, `ARCHITECTURE.md`, `SPEC.md`, `TODO.md`, `CHANGELOG.md`.
+- Standard project files: `.gitignore`, `LICENSE`, `CONTRIBUTING.md`.
+
+---
