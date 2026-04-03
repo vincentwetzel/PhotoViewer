@@ -9,6 +9,9 @@ namespace PhotoViewer
     {
         public MainWindow(MainWindowViewModel viewModel)
         {
+            // Apply theme BEFORE InitializeComponent so resources are available during XAML parsing
+            PhotoViewer.Services.ThemeManager.ApplyTheme(viewModel.SelectedTheme);
+            
             InitializeComponent();
             DataContext = viewModel;
         }
@@ -18,12 +21,36 @@ namespace PhotoViewer
             if (DataContext is MainWindowViewModel viewModel)
             {
                 await viewModel.InitializeAsync();
+
+                // Select Gallery by default
+                var gallerySource = viewModel.Sources.FirstOrDefault(s => s.DisplayName == "Gallery");
+                if (gallerySource != null)
+                {
+                    viewModel.SelectedSource = gallerySource;
+                }
             }
         }
 
         private void Exit_Click(object sender, RoutedEventArgs e)
         {
             System.Windows.Application.Current.Shutdown();
+        }
+
+        private void MinimizeButton_Click(object sender, RoutedEventArgs e)
+        {
+            this.WindowState = System.Windows.WindowState.Minimized;
+        }
+
+        private void MaximizeButton_Click(object sender, RoutedEventArgs e)
+        {
+            this.WindowState = this.WindowState == System.Windows.WindowState.Maximized
+                ? System.Windows.WindowState.Normal
+                : System.Windows.WindowState.Maximized;
+        }
+
+        private void CloseButton_Click(object sender, RoutedEventArgs e)
+        {
+            this.Close();
         }
 
         private void SourceListBox_ContextMenuOpening(object sender, ContextMenuEventArgs e)

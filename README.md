@@ -27,6 +27,13 @@ This application solves that problem by introducing layout persistence.
 
 To build and run this project, you will need the .NET SDK installed.
 
+### Building and Running
+
+```bash
+dotnet build PhotoViewer.sln
+dotnet run --project PhotoViewer.csproj
+```
+
 ### Setting Up OneDrive Integration
 
 To enable OneDrive integration, you must register the application in the Azure Portal:

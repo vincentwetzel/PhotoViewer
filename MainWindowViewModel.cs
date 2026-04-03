@@ -27,6 +27,20 @@ namespace PhotoViewer.ViewModels
         public ICommand ToggleFavoriteCommand { get; }
         public ICommand RemoveSourceCommand { get; }
         public ICommand AddGoogleDriveAccountCommand { get; }
+        public ICommand OpenSettingsCommand { get; }
+
+        private string _selectedTheme = "System";
+        public string SelectedTheme
+        {
+            get => _selectedTheme;
+            set
+            {
+                if (_selectedTheme == value) return;
+                _selectedTheme = value;
+                OnPropertyChanged(nameof(SelectedTheme));
+                ApplyTheme();
+            }
+        }
 
         private readonly ObservableCollection<PhotoWindowViewModel> _openPhotoWindows = new();
         private readonly LayoutService _layoutService;
@@ -36,6 +50,7 @@ namespace PhotoViewer.ViewModels
         private readonly FavoritesService _favoritesService;
         private readonly HistoryService _historyService;
         private readonly SourcePersistenceService _sourcePersistenceService;
+        private readonly SettingsService _settingsService;
 
         public ObservableCollection<SourceItemViewModel> Sources { get; } = new();
 
@@ -108,6 +123,7 @@ namespace PhotoViewer.ViewModels
             ToggleFavoriteCommand = new RelayCommand(ExecuteToggleFavoriteCommand);
             RemoveSourceCommand = new RelayCommand(ExecuteRemoveSourceCommand, CanExecuteRemoveSourceCommand);
             AddGoogleDriveAccountCommand = new RelayCommand(ExecuteAddGoogleDriveAccountCommandAsync);
+            OpenSettingsCommand = new RelayCommand(ExecuteOpenSettingsCommand);
 
             _layoutService = new LayoutService();
             _oneDriveAuthService = new OneDriveAuthenticationService();
@@ -115,6 +131,11 @@ namespace PhotoViewer.ViewModels
             _favoritesService = new FavoritesService();
             _historyService = new HistoryService();
             _sourcePersistenceService = new SourcePersistenceService();
+            _settingsService = new SettingsService();
+
+            // Load saved settings
+            var settings = _settingsService.LoadSettings();
+            _selectedTheme = settings.Theme;
 
             _photos = new ObservableCollection<PhotoItemViewModel>();
             PhotosView = CollectionViewSource.GetDefaultView(_photos);
@@ -629,6 +650,18 @@ namespace PhotoViewer.ViewModels
                     });
                 }
             }, cancellationToken);
+        }
+
+        private void ExecuteOpenSettingsCommand(object? parameter)
+        {
+            var settingsWindow = new SettingsWindow(this);
+            settingsWindow.ShowDialog();
+        }
+
+        public void ApplyTheme()
+        {
+            _settingsService.SaveSettings(new AppSettings { Theme = _selectedTheme });
+            ThemeManager.ApplyTheme(_selectedTheme);
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

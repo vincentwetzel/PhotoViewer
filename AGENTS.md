@@ -14,8 +14,11 @@ This is the main application window and central controller.
 - Provide the main user interface for managing photo sources and viewing photos.
 - Manage the lifecycle of all `PhotoWindow` instances.
 - Act as the entry point for the application.
-- Coordinate actions between the `SourcePersistenceService`, `LayoutService`, and various photo providers (e.g., `LocalFolderProvider`, `OneDriveProvider`).
+- Coordinate actions between the `SourcePersistenceService`, `LayoutService`, `SettingsService`, and various photo providers (e.g., `LocalFolderProvider`, `OneDriveProvider`).
 - Load and display photos from the currently selected source.
+- Default to showing the "Gallery" source (aggregating all sources) on startup.
+- Provide theme settings (Light/Dark/System) persisted across sessions.
+- Display photos in a justified gallery layout using `JustifiedWrapPanel` (variable widths based on actual aspect ratios, flush row edges).
 
 ---
 
@@ -26,8 +29,9 @@ This agent is a single window responsible for displaying one image.
 **Responsibilities:**
 - Display a single image from a given file path or URL.
 - Handle user input for zooming (e.g., mouse wheel) and panning (e.g., mouse drag).
-- Provide navigation controls (faint arrow buttons on left/right sides) to browse to the next/previous photo in the same folder.
+- Provide visual navigation controls (faint arrow buttons on left/right sides) to browse to the next/previous photo in the same folder.
 - Support keyboard navigation (Left/Right arrow keys) for next/previous photo.
+- Support deleting the current photo to Recycle Bin (Delete key).
 - Store its own state: file path, window position (X, Y), size (Width, Height), and image zoom/pan state.
 - Can be created, moved, resized, and closed independently.
 
@@ -55,3 +59,14 @@ This is a non-visual agent that handles saving and loading the list of photo sou
 - Save the JSON data to a file in the user's local application data folder.
 - Read the JSON file and deserialize it into a list of source configurations.
 - Provide the list of sources to the `Main Window Agent` on application startup.
+
+---
+
+### 5. Settings Service Agent (SettingsService)
+
+This is a non-visual agent that handles saving and loading application settings.
+
+**Responsibilities:**
+- Persist application settings (e.g., theme preference) to a JSON file in `%LOCALAPPDATA%\PhotoViewer\`.
+- Load saved settings on application startup.
+- Provide the `ThemeManager` with the user's theme preference to apply Light, Dark, or System theme.

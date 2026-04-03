@@ -36,10 +36,19 @@ The application is divided into three main layers:
   - **`SaveLayout(layout, filePath)`**: Serializes a `WindowLayout` model to a JSON file.
   - **`LoadLayout(filePath)`**: Deserializes a JSON file back into a `WindowLayout` model.
 - **`HistoryService.cs`**: A service to track and persist a list of recently opened image files. It will provide the data for the "Recently Viewed" source in the gallery.
+- **`SettingsService.cs`**: Manages application settings persistence. Reads/writes settings (e.g., theme preference) to a JSON file in `%LOCALAPPDATA%\PhotoViewer\`.
+- **`ThemeManager.cs`**: Applies the selected theme (Light/Dark/System) by setting application-wide color resources and detecting Windows system dark mode.
+- **`GalleryProvider.cs`**: A special photo provider that aggregates photos from all other configured sources, removing duplicates.
+- **`JustifiedWrapPanel`** (`Controls/JustifiedWrapPanel.cs`): A custom WPF `Panel` that implements a justified gallery layout:
+  - Reads actual pixel dimensions from each image to calculate aspect ratios.
+  - Arranges items in rows with a target height, scaling each row to flush-fill the available width.
+  - Last row is left-aligned at the target height without stretching.
+  - Scale is clamped (0.5x–1.5x) to prevent extreme distortion.
 
 ## Data Flow
 
-- **Direct Launch**: `App.xaml.cs` starts the app, creates the `MainWindowViewModel`, and shows the `MainWindow` (Gallery). When a user clicks a thumbnail, the `MainWindowViewModel` is commanded to open a new `PhotoWindow`.
+- **Direct Launch**: `App.xaml.cs` starts the app, creates the `MainWindowViewModel`, and shows the `MainWindow` (Gallery). When a user clicks a thumbnail, the `MainWindowViewModel` opens a new `PhotoWindow`.
 - **File Launch**: `App.xaml.cs` detects a command-line argument. It still creates the `MainWindowViewModel` to act as the central controller, but instead of showing the `MainWindow`, it directly commands the ViewModel to open a `PhotoWindow` for the specified file path. The `MainWindow` is not shown to the user in this case.
 - **Saving a Layout**: The `MainWindowViewModel` gathers the state from each active `PhotoWindowViewModel`, assembles a `WindowLayout` model, and passes it to the `LayoutService` to be written to disk.
 - **Loading a Layout**: The `MainWindowViewModel` uses the `LayoutService` to read a file into a `WindowLayout` model. It then iterates through the states in the model, creating and showing a new `PhotoWindow` for each one, configured with the specified properties.
+- **Applying Theme**: On startup, `MainWindowViewModel` loads the saved theme via `SettingsService`. `ThemeManager` applies the theme before the MainWindow's XAML parses. Changing the theme in Settings immediately updates all `DynamicResource` bindings across the UI.

@@ -37,6 +37,20 @@ This To-Do list outlines the development plan for adding a unified gallery and m
 ## Milestone 5: Deployment
 - [ ] Create an installer (e.g., using MSIX, WiX) that properly registers the application for file associations in the Windows Registry.
 
+## Milestone 6: UI Polish and Refinements
+- [X] Add "Gallery" source that aggregates photos from all other sources.
+- [X] Default to selecting the Gallery tab on app startup.
+- [X] Add settings cog to title bar with light/dark/system theme support.
+- [X] Implement custom title bar with minimize, maximize, close buttons.
+- [X] Add ascending/descending sort direction toggle.
+- [X] Replace star favorites with heart icons.
+- [X] Fix photo opening on single click instead of double click.
+- [X] Fix photo window displaying gray screen instead of image.
+- [X] Add navigation arrows to PhotoWindow for browsing photos.
+- [X] Fix dark theme for all UI elements (scrollbars, menus, backgrounds, text).
+- [X] Implement `JustifiedWrapPanel` with proper aspect ratio reading from image files.
+- [X] Portrait/landscape photos now display at correct proportional widths.
+
 ---
 
 ### Completed Features
@@ -44,3 +58,11 @@ This To-Do list outlines the development plan for adding a unified gallery and m
 - Save/Load of window layouts.
 - Arrow key navigation and delete-to-recycle-bin in `PhotoWindow`.
 - Command-line file opening.
+- Gallery view aggregating photos from all sources.
+- Settings persistence and theme system (Light/Dark/System).
+- Custom title bar with window controls.
+- Sort by direction (ascending/descending).
+- Favorites system with heart icons.
+- Photo navigation arrows in PhotoWindow.
+- Justified gallery layout with true aspect ratio display (`JustifiedWrapPanel`).
+- Pixel dimension reading from image files for accurate aspect ratios.

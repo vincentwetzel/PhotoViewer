@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:viewModels="clr-namespace:PhotoViewer.ViewModels"
         xmlns:selectors="clr-namespace:PhotoViewer.Selectors"
         xmlns:controls="clr-namespace:PhotoViewer.Controls"
@@ -10,10 +11,56 @@
         mc:Ignorable="d"
         Title="PhotoViewer Gallery" Height="768" Width="1024"
         WindowStartupLocation="CenterScreen"
-        Loaded="Window_Loaded">
+        Loaded="Window_Loaded"
+        Background="{DynamicResource WindowBackground}"
+        WindowStyle="None"
+        ResizeMode="CanResize"
+        AllowsTransparency="True">
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="32" ResizeBorderThickness="5" />
+    </shell:WindowChrome.WindowChrome>
     <Window.Resources>
         <converters:ImagePathToThumbnailConverter x:Key="ImagePathToThumbnailConverter" />
-        
+
+        <!-- Menu Styles -->
+        <Style TargetType="MenuItem">
+            <Style.Triggers>
+                <Trigger Property="IsHighlighted" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource ListItemHover}" />
+                    <Setter Property="Foreground" Value="{DynamicResource TextForeground}" />
+                </Trigger>
+            </Style.Triggers>
+            <Setter Property="Foreground" Value="{DynamicResource TextForeground}" />
+        </Style>
+        <Style TargetType="Menu">
+            <Setter Property="Background" Value="{DynamicResource MenuBackground}" />
+        </Style>
+
+        <!-- ScrollBar Styles -->
+        <Style TargetType="ScrollBar">
+            <Setter Property="Width" Value="10" />
+            <Setter Property="MinWidth" Value="10" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid Background="{DynamicResource ControlBackground}">
+                            <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                <Track.Thumb>
+                                    <Thumb>
+                                        <Thumb.Template>
+                                            <ControlTemplate>
+                                                <Border Background="{DynamicResource BorderBrush}" CornerRadius="5" Margin="1,0,1,0" />
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Placeholder Icons -->
         <Path x:Key="IconFolder" x:Shared="False" Data="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z" Fill="Gray" />
         <Path x:Key="IconOneDrive" x:Shared="False" Data="M5.5,6.5A2,2 0 0,1 7.5,4.5A2,2 0 0,1 9.5,6.5A2,2 0 0,1 7.5,8.5A2,2 0 0,1 5.5,6.5M10.5,10.5A2,2 0 0,1 12.5,8.5A2,2 0 0,1 14.5,10.5A2,2 0 0,1 12.5,12.5A2,2 0 0,1 10.5,10.5M2,19.5V10.5A2,2 0 0,1 4,8.5H5.5V10.5H4V19.5H12.5V18H14.5V19.5A2,2 0 0,1 12.5,21.5H4A2,2 0 0,1 2,19.5M19,13A4,4 0 0,0 15,17H15.67A3.5,3.5 0 0,0 19,20.5A3.5,3.5 0 0,0 22.5,17A3.5,3.5 0 0,0 19,13.5C18.9,13.5 18.79,13.5 18.69,13.55A4,4 0 0,0 19,13Z" Fill="#0078D4" />
@@ -22,6 +69,7 @@
         <Path x:Key="IconGallery" x:Shared="False" Data="M4,4H10V10H4V4M14,4H20V10H14V4M4,14H10V20H4V14M14,14H20V20H14V14Z" Fill="#FF6B00" />
         <Path x:Key="IconHeart" x:Shared="False" Data="M12,21.35l-1.45-1.32C5.4,15.36 2,12.28 2,8.5 2,5.42 4.42,3 7.5,3c1.74,0 3.41,0.81 4.5,2.09C13.09,3.81 14.76,3 16.5,3 19.58,3 22,5.42 22,8.5c0,3.78 -3.4,6.86 -8.55,11.54L12,21.35z" Fill="#FF0000" Stretch="Uniform" Width="20" Height="20" />
         <Path x:Key="IconHeartOutline" x:Shared="False" Data="M16.5,3c-1.74,0 -3.41,0.81 -4.5,2.09C10.91,3.81 9.24,3 7.5,3 4.42,3 2,5.42 2,8.5c0,3.78 3.4,6.86 8.55,11.54L12,21.35l1.45-1.32C18.6,15.36 22,12.28 22,8.5 22,5.42 19.58,3 16.5,3zm-4.4,15.55l-0.1,0.1 -0.1-0.1C7.14,14.24 4,11.39 4,8.5 4,6.5 5.5,5 7.5,5c1.54,0 3.04,0.99 3.56,2.36h1.87C13.46,5.99 14.96,5 16.5,5c2,0 3.5,1.5 3.5,3.5 0,2.89 -3.14,5.74 -7.9,10.05z" Fill="#CCCCCC" Stretch="Uniform" Width="20" Height="20" />
+        <Path x:Key="IconSettings" x:Shared="False" Data="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z" Fill="#666666" />
 
         <DataTemplate x:Key="FolderSourceTemplate">
             <StackPanel Orientation="Horizontal">
@@ -66,26 +114,121 @@
                                           DefaultTemplate="{StaticResource GenericSourceTemplate}" />
 
     </Window.Resources>
-    <DockPanel>
-        <Menu DockPanel.Dock="Top">
-            <MenuItem Header="_File">
-                <MenuItem Header="_Open Image(s)..." Command="{Binding OpenImageCommand}" />
-                <Separator />
-                <MenuItem Header="_Save Layout..." Command="{Binding SaveLayoutCommand}" IsEnabled="False" />
-                <MenuItem Header="_Load Layout..." Command="{Binding LoadLayoutCommand}" IsEnabled="False" />
-                <Separator />
-                <MenuItem Header="E_xit" Click="Exit_Click" />
-            </MenuItem>
-            <MenuItem Header="_Sources">
-                <MenuItem Header="Add Local Folder..." Command="{Binding AddLocalFolderCommand}" />
-                <MenuItem Header="Add OneDrive Account..." Command="{Binding AddOneDriveAccountCommand}" />
-                <MenuItem Header="Add Google Drive Account..." Command="{Binding AddGoogleDriveAccountCommand}" />
-                <MenuItem Header="Sync iCloud Photos..." IsEnabled="False" />
-                <MenuItem Header="Import from Phone..." IsEnabled="False" />
-            </MenuItem>
-        </Menu>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-        <Grid>
+        <!-- Custom Title Bar -->
+        <Border Grid.Row="0" Background="{DynamicResource ControlBackground}" Height="32">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                
+                <!-- Window Title -->
+                <TextBlock Grid.Column="0" Text="PhotoViewer Gallery" 
+                           VerticalAlignment="Center" Margin="10,0,0,0"
+                           FontSize="13" Foreground="{DynamicResource TextForeground}" />
+                
+                <!-- Window Controls -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                    <!-- Settings Button -->
+                    <Button Width="46" Height="32" Background="Transparent" BorderThickness="0" Cursor="Hand"
+                            Command="{Binding OpenSettingsCommand}" ToolTip="Settings">
+                        <Viewbox Width="18" Height="18" Margin="2">
+                            <ContentPresenter Content="{StaticResource IconSettings}" />
+                        </Viewbox>
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Foreground" Value="{DynamicResource TextForeground}" />
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#40000000" />
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    
+                    <!-- Minimize Button -->
+                    <Button Width="46" Height="32" Background="Transparent" BorderThickness="0" Cursor="Hand"
+                            Click="MinimizeButton_Click" ToolTip="Minimize">
+                        <Path Data="M6,8 L18,8" Stroke="{DynamicResource TextForeground}" StrokeThickness="1" />
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#40000000" />
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    
+                    <!-- Maximize/Restore Button -->
+                    <Button x:Name="MaximizeButton" Width="46" Height="32" Background="Transparent" BorderThickness="0" Cursor="Hand"
+                            Click="MaximizeButton_Click" ToolTip="Maximize">
+                        <Path Data="M6,6 L18,6 L18,18 L6,18 Z" Stroke="{DynamicResource TextForeground}" StrokeThickness="1" />
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#40000000" />
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    
+                    <!-- Close Button -->
+                    <Button Width="46" Height="32" Background="Transparent" BorderThickness="0" Cursor="Hand"
+                            Click="CloseButton_Click" ToolTip="Close">
+                        <Path Data="M8,8 L16,16 M16,8 L8,16" Stroke="{DynamicResource TextForeground}" StrokeThickness="1" />
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#E81123" />
+                                        <Setter Property="Foreground" Value="White" />
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Content -->
+        <Grid Grid.Row="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Menu Bar -->
+            <Menu Grid.Row="0" Background="{DynamicResource MenuBackground}">
+                <MenuItem Header="_File">
+                    <MenuItem Header="_Open Image(s)..." Command="{Binding OpenImageCommand}" />
+                    <Separator />
+                    <MenuItem Header="_Save Layout..." Command="{Binding SaveLayoutCommand}" IsEnabled="False" />
+                    <MenuItem Header="_Load Layout..." Command="{Binding LoadLayoutCommand}" IsEnabled="False" />
+                    <Separator />
+                    <MenuItem Header="E_xit" Click="Exit_Click" />
+                </MenuItem>
+                <MenuItem Header="_Sources">
+                    <MenuItem Header="Add Local Folder..." Command="{Binding AddLocalFolderCommand}" />
+                    <MenuItem Header="Add OneDrive Account..." Command="{Binding AddOneDriveAccountCommand}" />
+                    <MenuItem Header="Add Google Drive Account..." Command="{Binding AddGoogleDriveAccountCommand}" />
+                    <MenuItem Header="Sync iCloud Photos..." IsEnabled="False" />
+                    <MenuItem Header="Import from Phone..." IsEnabled="False" />
+                </MenuItem>
+            </Menu>
+
+            <Grid Grid.Row="1" Background="{DynamicResource ControlBackground}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="220" MinWidth="150" MaxWidth="400" /> <!-- Source Navigation Pane -->
                 <ColumnDefinition Width="Auto" /> <!-- GridSplitter -->
@@ -95,12 +238,14 @@
             <!-- Source Navigation Pane -->
             <ListBox x:Name="SourceListBox" Grid.Column="0" ItemsSource="{Binding Sources}"
                      SelectedItem="{Binding SelectedSource}"
-                     BorderThickness="0" Background="#F0F0F0"
+                     BorderThickness="0" Background="{DynamicResource ControlBackground}"
                      ItemTemplateSelector="{StaticResource SourceSelector}"
+                     Foreground="{DynamicResource TextForeground}"
                      ContextMenuOpening="SourceListBox_ContextMenuOpening">
                 <ListBox.ItemContainerStyle>
                     <Style TargetType="ListBoxItem">
                         <Setter Property="Padding" Value="8,5,8,5" />
+                        <Setter Property="Foreground" Value="{DynamicResource TextForeground}" />
                     </Style>
                 </ListBox.ItemContainerStyle>
                 <ListBox.ContextMenu>
@@ -110,41 +255,52 @@
                 </ListBox.ContextMenu>
             </ListBox>
 
-            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="LightGray" />
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="{DynamicResource BorderBrush}" />
 
             <!-- Photo Grid -->
             <DockPanel Grid.Column="2">
                 <!-- Toolbar for Sorting and Filtering -->
-                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5" Background="#F8F8F8">
-                    <TextBlock Text="Sort by:" VerticalAlignment="Center" Margin="5,0,5,0"/>
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5" Background="{DynamicResource ControlBackground}">
+                    <TextBlock Text="Sort by:" VerticalAlignment="Center" Margin="5,0,5,0" Foreground="{DynamicResource TextForeground}"/>
                     <ComboBox
                         ItemsSource="{Binding SortOptions}"
                         SelectedItem="{Binding SelectedSortOption}"
                         Width="120"
                         VerticalContentAlignment="Center"/>
 
-                    <TextBlock Text="Order:" VerticalAlignment="Center" Margin="15,0,5,0"/>
+                    <TextBlock Text="Order:" VerticalAlignment="Center" Margin="15,0,5,0" Foreground="{DynamicResource TextForeground}"/>
                     <ComboBox
                         ItemsSource="{Binding SortDirections}"
                         SelectedItem="{Binding SelectedSortDirection}"
                         Width="100"
                         VerticalContentAlignment="Center"/>
 
-                    <TextBlock Text="Search:" VerticalAlignment="Center" Margin="15,0,5,0"/>
+                    <TextBlock Text="Search:" VerticalAlignment="Center" Margin="15,0,5,0" Foreground="{DynamicResource TextForeground}"/>
                     <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Width="200" VerticalContentAlignment="Center"/>
                 </StackPanel>
 
                 <ListBox ItemsSource="{Binding PhotosView}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                         SelectionChanged="PhotoListBox_SelectionChanged">
+                         SelectionChanged="PhotoListBox_SelectionChanged"
+                         Background="{DynamicResource ControlBackground}"
+                         Margin="24,0,24,0"
+                         BorderThickness="0">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Padding" Value="0" />
+                            <Setter Property="Margin" Value="0" />
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+                        </Style>
+                    </ListBox.ItemContainerStyle>
                     <ListBox.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <controls:VirtualizingWrapPanel />
+                            <controls:JustifiedWrapPanel TargetRowHeight="180" ItemSpacing="5" />
                         </ItemsPanelTemplate>
                     </ListBox.ItemsPanel>
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="{x:Type viewModels:PhotoItemViewModel}">
-                            <Border Margin="5" BorderBrush="LightGray" BorderThickness="1" ToolTip="{Binding Photo.FilePath}">
-                                <Grid Width="150" Height="150" Cursor="Hand">
+                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" ToolTip="{Binding Photo.FilePath}">
+                                <Grid Cursor="Hand">
                                     <Image Source="{Binding Photo.FilePath, Converter={StaticResource ImagePathToThumbnailConverter}, IsAsync=True}" Stretch="UniformToFill" />
 
                                     <!-- Favorite Button -->
@@ -176,5 +332,6 @@
                 </ListBox>
             </DockPanel>
         </Grid>
-    </DockPanel>
+        </Grid>
+    </Grid>
 </Window>
