@@ -31,6 +31,14 @@ namespace PhotoViewer.Services
                 resources[System.Windows.SystemColors.ControlBrushKey] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(60, 60, 60));
                 resources[System.Windows.SystemColors.HighlightBrushKey] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(80, 80, 80));
                 resources[System.Windows.SystemColors.ScrollBarBrushKey] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(80, 80, 80));
+                
+                // Override menu popup colors (dropdown background/border)
+                resources[System.Windows.SystemColors.MenuTextBrushKey] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255));
+                resources[System.Windows.SystemColors.MenuBarBrushKey] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(30, 30, 30));
+                resources[System.Windows.SystemColors.MenuHighlightBrushKey] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(60, 60, 60));
+                resources[System.Windows.SystemColors.MenuBrushKey] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(30, 30, 30));
+                resources[System.Windows.SystemColors.WindowBrushKey] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(30, 30, 30));
+                resources[System.Windows.SystemColors.InfoBrushKey] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(30, 30, 30));
             }
             else
             {

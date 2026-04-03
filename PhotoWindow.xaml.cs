@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿using System.Windows;
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿using System.Windows;
 using System.Windows.Input;
 using System;
 using System.Windows.Media.Imaging;
@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using Microsoft.VisualBasic.FileIO; // For FileSystem.DeleteFile
+using System.Runtime.InteropServices;
 using PhotoViewer.ViewModels;
 
 namespace PhotoViewer
@@ -16,6 +17,12 @@ namespace PhotoViewer
     /// </summary>
     public partial class PhotoWindow : Window
     {
+        // DWM API for dark title bar
+        private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+
         private MatrixTransform _transform = new MatrixTransform();
         private bool _isPanning;
         private System.Windows.Point _panStartPoint;
@@ -38,6 +45,8 @@ namespace PhotoViewer
             this.MouseUp += PhotoWindow_MouseUp;
             this.KeyDown += PhotoWindow_KeyDown;
             this.Loaded += PhotoWindow_Loaded;
+            this.SourceInitialized += PhotoWindow_SourceInitialized;
+            this.Closed += PhotoWindow_Closed;
             
             // Set focus to window for keyboard navigation
             this.Focus();
@@ -50,6 +59,41 @@ namespace PhotoViewer
             {
                 LoadImage(vm.FilePath);
             }
+
+            // Apply dark mode to title bar via DWM
+            ApplyDarkModeToTitleBar();
+        }
+
+        private void ApplyDarkModeToTitleBar()
+        {
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            if (hwnd != IntPtr.Zero)
+            {
+                int useDark = 1;
+                DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDark, sizeof(int));
+            }
+        }
+
+        private void PhotoWindow_SourceInitialized(object sender, EventArgs e)
+        {
+            // Apply dark mode title bar
+            ApplyDarkModeToTitleBar();
+            
+            // Listen for system theme changes to update title bar
+            Microsoft.Win32.SystemEvents.UserPreferenceChanged += SystemEvents_UserPreferenceChanged;
+        }
+
+        private void SystemEvents_UserPreferenceChanged(object sender, Microsoft.Win32.UserPreferenceChangedEventArgs e)
+        {
+            if (e.Category == Microsoft.Win32.UserPreferenceCategory.General)
+            {
+                Dispatcher.Invoke(() => ApplyDarkModeToTitleBar());
+            }
+        }
+
+        private void PhotoWindow_Closed(object sender, EventArgs e)
+        {
+            Microsoft.Win32.SystemEvents.UserPreferenceChanged -= SystemEvents_UserPreferenceChanged;
         }
 
         private void PhotoWindow_MouseDown(object sender, MouseButtonEventArgs e)

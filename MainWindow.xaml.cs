@@ -28,11 +28,30 @@ namespace PhotoViewer
                 {
                     viewModel.SelectedSource = gallerySource;
                 }
+
+                // Apply saved theme
+                PhotoViewer.Services.ThemeManager.ApplyTheme(viewModel.SelectedTheme);
+
+                // Listen for system theme changes
+                Microsoft.Win32.SystemEvents.UserPreferenceChanged += SystemEvents_UserPreferenceChanged;
+            }
+        }
+
+        private void SystemEvents_UserPreferenceChanged(object sender, Microsoft.Win32.UserPreferenceChangedEventArgs e)
+        {
+            if (e.Category == Microsoft.Win32.UserPreferenceCategory.General && DataContext is MainWindowViewModel vm)
+            {
+                // If theme is set to "System", re-apply it
+                if (vm.SelectedTheme == "System")
+                {
+                    Dispatcher.Invoke(() => vm.ApplyTheme());
+                }
             }
         }
 
         private void Exit_Click(object sender, RoutedEventArgs e)
         {
+            Microsoft.Win32.SystemEvents.UserPreferenceChanged -= SystemEvents_UserPreferenceChanged;
             System.Windows.Application.Current.Shutdown();
         }
 
@@ -90,6 +109,36 @@ namespace PhotoViewer
                 listBox.DataContext is MainWindowViewModel viewModel)
             {
                 viewModel.OpenImage(photoVm.Photo.FilePath);
+            }
+        }
+
+        private void ThemeComboBox_DropDownOpened(object sender, System.EventArgs e)
+        {
+            if (sender is System.Windows.Controls.ComboBox cb && cb.Template != null)
+            {
+                var popup = cb.Template.FindName("PART_Popup", cb) as System.Windows.Controls.Primitives.Popup;
+                if (popup?.Child is System.Windows.Controls.Border border)
+                {
+                    bool isDark = DataContext is MainWindowViewModel vm &&
+                        (vm.SelectedTheme == "Dark" || (vm.SelectedTheme == "System" && IsSystemDarkMode()));
+
+                    border.Background = new System.Windows.Media.SolidColorBrush(
+                        isDark ? System.Windows.Media.Color.FromRgb(43, 43, 43) : System.Windows.Media.Colors.White);
+                }
+            }
+        }
+
+        private bool IsSystemDarkMode()
+        {
+            try
+            {
+                using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+                var value = key?.GetValue("AppsUseLightTheme");
+                return value != null && (int)value == 0;
+            }
+            catch
+            {
+                return false;
             }
         }
     }

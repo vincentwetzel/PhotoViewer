@@ -20,7 +20,7 @@ namespace PhotoViewer.Converters
                 var bitmapImage = new BitmapImage();
                 bitmapImage.BeginInit();
                 bitmapImage.UriSource = new Uri(imagePath);
-                bitmapImage.DecodePixelWidth = 150; // Create a 150px wide thumbnail
+                bitmapImage.DecodePixelWidth = 500; // Larger thumbnail for better quality when scaled
                 bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
                 bitmapImage.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
                 bitmapImage.EndInit();

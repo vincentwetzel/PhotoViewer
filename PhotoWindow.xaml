@@ -5,7 +5,8 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="{Binding FilePath}" Height="450" Width="800"
-        KeyDown="PhotoWindow_KeyDown">
+        KeyDown="PhotoWindow_KeyDown"
+        Background="#1a1a1a">
     <!-- TODO: Add a converter for the title later to show just the file name -->
     <Grid Background="#1a1a1a">
         <!-- The Image control will display the photo. Zoom and Pan will be applied via its RenderTransform. -->
