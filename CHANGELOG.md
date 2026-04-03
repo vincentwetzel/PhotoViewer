@@ -15,6 +15,8 @@ and this project adheres to Semantic Versioning.
 - **Favorites as Heart Icons**: Heart-shaped favorite/unfavorite buttons on gallery thumbnails and in the source navigation pane.
 - **Sort Direction Toggle**: Ascending/Descending sort order option alongside the existing Sort By dropdown.
 - **Settings Window**: Simple settings dialog with theme selector that applies changes in real-time.
+- **Persistent Window Sizing**: Both the main gallery window and individual photo windows remember their size across sessions. Window sizes are stored in `%LOCALAPPDATA%\PhotoViewer\`.
+- **Taskbar-Respecting Maximize**: Both main and photo windows respect the taskbar when maximized, using `SystemParameters.WorkArea` instead of covering it.
 
 ### Changed
 - **Default Launch View**: Application now opens directly to the Gallery tab instead of requiring manual selection.
@@ -22,6 +24,7 @@ and this project adheres to Semantic Versioning.
 - **Gallery Opens on Single Click**: Selecting a photo in the gallery now opens it immediately (changed from double-click).
 - **Remove Source Fix**: Fixed context menu binding so right-click → Remove now properly removes local folder sources.
 - **PhotoWindow Initialization**: Fixed issue where PhotoWindow wasn't loading the image from its ViewModel, breaking navigation.
+- **PhotoWindow Title Bar**: Title bar dark mode now respects the app's theme setting (Light/Dark/System) instead of only following the system theme.
 
 ### Fixed
 - Sort direction correctly applies to all sort options (File Name, Date Created, File Size).

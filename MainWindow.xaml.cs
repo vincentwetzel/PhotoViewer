@@ -7,13 +7,31 @@ namespace PhotoViewer
 {
     public partial class MainWindow : Window
     {
+        private readonly MainWindowSizeService _windowSizeService;
+
         public MainWindow(MainWindowViewModel viewModel)
         {
             // Apply theme BEFORE InitializeComponent so resources are available during XAML parsing
             PhotoViewer.Services.ThemeManager.ApplyTheme(viewModel.SelectedTheme);
-            
+
             InitializeComponent();
             DataContext = viewModel;
+
+            _windowSizeService = viewModel.MainWindowSizeService;
+
+            // Apply saved window size
+            var savedSize = _windowSizeService.LoadSize();
+            this.Width = savedSize.Width;
+            this.Height = savedSize.Height;
+
+            // Save window size when closed
+            this.Closed += MainWindow_Closed;
+        }
+
+        private void MainWindow_Closed(object sender, EventArgs e)
+        {
+            _windowSizeService.SaveSize(this.Width, this.Height);
+            Microsoft.Win32.SystemEvents.UserPreferenceChanged -= SystemEvents_UserPreferenceChanged;
         }
 
         private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -48,7 +66,6 @@ namespace PhotoViewer
 
         private void Exit_Click(object sender, RoutedEventArgs e)
         {
-            Microsoft.Win32.SystemEvents.UserPreferenceChanged -= SystemEvents_UserPreferenceChanged;
             System.Windows.Application.Current.Shutdown();
         }
 
@@ -57,11 +74,34 @@ namespace PhotoViewer
             this.WindowState = System.Windows.WindowState.Minimized;
         }
 
+        private bool _isMaximized = false;
+        private Rect _restoreBounds;
+
         private void MaximizeButton_Click(object sender, RoutedEventArgs e)
         {
-            this.WindowState = this.WindowState == System.Windows.WindowState.Maximized
-                ? System.Windows.WindowState.Normal
-                : System.Windows.WindowState.Maximized;
+            if (_isMaximized)
+            {
+                // Restore to previous size and position
+                this.WindowState = System.Windows.WindowState.Normal;
+                this.Left = _restoreBounds.Left;
+                this.Top = _restoreBounds.Top;
+                this.Width = _restoreBounds.Width;
+                this.Height = _restoreBounds.Height;
+                _isMaximized = false;
+            }
+            else
+            {
+                // Save current bounds before maximizing
+                _restoreBounds = new Rect(this.Left, this.Top, this.Width, this.Height);
+                
+                // Use WorkingArea to respect the taskbar
+                var workingArea = System.Windows.SystemParameters.WorkArea;
+                this.Left = workingArea.Left;
+                this.Top = workingArea.Top;
+                this.Width = workingArea.Width;
+                this.Height = workingArea.Height;
+                _isMaximized = true;
+            }
         }
 
         private void CloseButton_Click(object sender, RoutedEventArgs e)

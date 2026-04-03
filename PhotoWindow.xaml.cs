@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿using System.Windows;
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿using System.Windows;
 using System.Windows.Input;
 using System;
 using System.Windows.Media.Imaging;
@@ -19,6 +19,12 @@ namespace PhotoViewer
     {
         // DWM API for dark title bar
         private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+        
+        // Windows messages for intercepting maximize
+        private const int WM_SYSCOMMAND = 0x0112;
+        private const int SC_MAXIMIZE = 0xF030;
+        private const int SC_RESTORE = 0xF120;
+        private const int SC_CLOSE = 0xF060;
 
         [DllImport("dwmapi.dll")]
         private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
@@ -27,6 +33,8 @@ namespace PhotoViewer
         private bool _isPanning;
         private System.Windows.Point _panStartPoint;
         private string _currentFilePath = "";
+        private bool _isMaximized = false;
+        private Rect _restoreBounds;
 
         // Public properties to expose the current transform state for saving
         public double CurrentZoom => _transform.Matrix.M11; // Assuming uniform scaling
@@ -69,8 +77,18 @@ namespace PhotoViewer
             var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
             if (hwnd != IntPtr.Zero)
             {
-                // Respect the application's theme setting - don't force dark mode
-                bool useDark = PhotoViewer.Services.ThemeManager.IsSystemDarkMode();
+                // Read the actual theme setting from app settings
+                var settingsService = new PhotoViewer.Services.SettingsService();
+                var settings = settingsService.LoadSettings();
+                
+                bool useDark = settings.Theme switch
+                {
+                    "Light" => false,
+                    "Dark" => true,
+                    "System" => PhotoViewer.Services.ThemeManager.IsSystemDarkMode(),
+                    _ => PhotoViewer.Services.ThemeManager.IsSystemDarkMode()
+                };
+                
                 int useDarkValue = useDark ? 1 : 0;
                 DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDarkValue, sizeof(int));
             }
@@ -80,9 +98,48 @@ namespace PhotoViewer
         {
             // Apply dark mode title bar
             ApplyDarkModeToTitleBar();
-            
+
             // Listen for system theme changes to update title bar
             Microsoft.Win32.SystemEvents.UserPreferenceChanged += SystemEvents_UserPreferenceChanged;
+
+            // Hook into window messages to intercept maximize/restore
+            var source = System.Windows.Interop.HwndSource.FromHwnd(
+                new System.Windows.Interop.WindowInteropHelper(this).Handle);
+            source.AddHook(WndProc);
+        }
+
+        private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (msg == WM_SYSCOMMAND)
+            {
+                int command = wParam.ToInt32() & 0xFFF0;
+                
+                if (command == SC_MAXIMIZE)
+                {
+                    // Intercept maximize - save bounds and use working area
+                    _restoreBounds = new Rect(this.Left, this.Top, this.Width, this.Height);
+                    var workingArea = System.Windows.SystemParameters.WorkArea;
+                    this.Left = workingArea.Left;
+                    this.Top = workingArea.Top;
+                    this.Width = workingArea.Width;
+                    this.Height = workingArea.Height;
+                    _isMaximized = true;
+                    handled = true;
+                    return IntPtr.Zero;
+                }
+                else if (command == SC_RESTORE && _isMaximized)
+                {
+                    // Intercept restore from maximized
+                    this.Left = _restoreBounds.Left;
+                    this.Top = _restoreBounds.Top;
+                    this.Width = _restoreBounds.Width;
+                    this.Height = _restoreBounds.Height;
+                    _isMaximized = false;
+                    handled = true;
+                    return IntPtr.Zero;
+                }
+            }
+            return IntPtr.Zero;
         }
 
         private void SystemEvents_UserPreferenceChanged(object sender, Microsoft.Win32.UserPreferenceChangedEventArgs e)

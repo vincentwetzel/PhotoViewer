@@ -44,6 +44,8 @@ namespace PhotoViewer.ViewModels
 
         private readonly ObservableCollection<PhotoWindowViewModel> _openPhotoWindows = new();
         private readonly LayoutService _layoutService;
+        private readonly PhotoWindowSizeService _photoWindowSizeService;
+        private readonly MainWindowSizeService _mainWindowSizeService;
         private CancellationTokenSource? _photoLoadingCts;
         private readonly OneDriveAuthenticationService _oneDriveAuthService;
         private readonly GoogleAuthenticationService _googleAuthService;
@@ -51,6 +53,9 @@ namespace PhotoViewer.ViewModels
         private readonly HistoryService _historyService;
         private readonly SourcePersistenceService _sourcePersistenceService;
         private readonly SettingsService _settingsService;
+
+        /// <summary>Provides access to the main window size service for the MainWindow.</summary>
+        public MainWindowSizeService MainWindowSizeService => _mainWindowSizeService;
 
         /// <summary>Caches loaded photo items per source to avoid re-scanning on every switch.</summary>
         private readonly Dictionary<object, PhotoCacheEntry> _photoCache = new();
@@ -179,6 +184,8 @@ namespace PhotoViewer.ViewModels
             OpenSettingsCommand = new RelayCommand(ExecuteOpenSettingsCommand);
 
             _layoutService = new LayoutService();
+            _photoWindowSizeService = new PhotoWindowSizeService();
+            _mainWindowSizeService = new MainWindowSizeService();
             _oneDriveAuthService = new OneDriveAuthenticationService();
             _googleAuthService = new GoogleAuthenticationService();
             _favoritesService = new FavoritesService();
@@ -528,8 +535,19 @@ namespace PhotoViewer.ViewModels
                     DataContext = photoWindowViewModel
                 };
 
+                // Apply saved window size
+                var savedSize = _photoWindowSizeService.LoadSize();
+                photoWindow.Width = savedSize.Width;
+                photoWindow.Height = savedSize.Height;
+
                 _openPhotoWindows.Add(photoWindowViewModel);
-                photoWindow.Closed += (sender, e) => _openPhotoWindows.Remove(photoWindowViewModel);
+                
+                // Save window size when closed
+                photoWindow.Closed += (sender, e) =>
+                {
+                    _openPhotoWindows.Remove(photoWindowViewModel);
+                    _photoWindowSizeService.SaveSize(photoWindow.Width, photoWindow.Height);
+                };
 
                 photoWindow.Show();
             }

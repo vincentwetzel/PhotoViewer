@@ -41,11 +41,13 @@ This is the main application window and central controller.
 - Provide the main user interface for managing photo sources and viewing photos.
 - Manage the lifecycle of all `PhotoWindow` instances.
 - Act as the entry point for the application.
-- Coordinate actions between the `SourcePersistenceService`, `LayoutService`, `SettingsService`, and various photo providers (e.g., `LocalFolderProvider`, `OneDriveProvider`).
+- Coordinate actions between the `SourcePersistenceService`, `LayoutService`, `SettingsService`, `MainWindowSizeService`, `PhotoWindowSizeService`, and various photo providers (e.g., `LocalFolderProvider`, `OneDriveProvider`).
 - Load and display photos from the currently selected source.
 - Default to showing the "Gallery" source (aggregating all sources) on startup.
 - Provide theme settings (Light/Dark/System) persisted across sessions.
 - Display photos in a justified gallery layout using `JustifiedWrapPanel` (variable widths based on actual aspect ratios, flush row edges).
+- Persist and restore main window size across sessions via `MainWindowSizeService`.
+- Maximize behavior respects the taskbar by using `SystemParameters.WorkArea`.
 
 ---
 
@@ -62,6 +64,9 @@ This agent is a single window responsible for displaying one image.
 - Store its own state: file path, window position (X, Y), size (Width, Height), and image zoom/pan state.
 - Can be created, moved, resized, and closed independently.
 - Fully theme-compliant — all colors use `{DynamicResource}` from the theme system. No hardcoded colors.
+- Persist and restore window size across sessions via `PhotoWindowSizeService`.
+- Maximize behavior respects the taskbar by using `SystemParameters.WorkArea` (intercepts WM_SYSCOMMAND).
+- Title bar dark mode respects the app's theme setting (Light/Dark/System) from `SettingsService`.
 
 ---
 
@@ -127,3 +132,29 @@ This is a non-visual caching system for loaded photo items.
 - On revisit: instantly display cached viewmodels via `RangeObservableCollection.AddRange()` (zero population animation).
 - Kick off a background refresh after displaying cached content to catch file changes.
 - Staleness detection: 5-minute timeout + sampling up to 50 files for existence (invalidates if >10% missing).
+
+---
+
+### 8. Photo Window Size Service Agent (PhotoWindowSizeService)
+
+This is a non-visual agent that handles saving and loading the individual photo window size.
+
+**Responsibilities:**
+- Serialize the photo window dimensions (Width, Height) into a JSON format.
+- Save the JSON data to `%LOCALAPPDATA%\PhotoViewer\photoWindowSize.json`.
+- Read the JSON file and deserialize it into a `PhotoWindowSizeSettings` object.
+- Provide the saved size to the `Main Window Agent` when opening a new photo window.
+- Default to 800x600 on first use.
+
+---
+
+### 9. Main Window Size Service Agent (MainWindowSizeService)
+
+This is a non-visual agent that handles saving and loading the main gallery window size.
+
+**Responsibilities:**
+- Serialize the main window dimensions (Width, Height) into a JSON format.
+- Save the JSON data to `%LOCALAPPDATA%\PhotoViewer\mainWindowSize.json`.
+- Read the JSON file and deserialize it into a `MainWindowSizeSettings` object.
+- Provide the saved size to the `Main Window` on startup.
+- Default to 1200x800 on first use.
