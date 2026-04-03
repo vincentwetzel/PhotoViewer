@@ -6,17 +6,17 @@
         mc:Ignorable="d"
         Title="{Binding FilePath}" Height="450" Width="800"
         KeyDown="PhotoWindow_KeyDown"
-        Background="#1a1a1a">
+        Background="{DynamicResource WindowBackground}">
     <!-- TODO: Add a converter for the title later to show just the file name -->
-    <Grid Background="#1a1a1a">
+    <Grid Background="{DynamicResource WindowBackground}">
         <!-- The Image control will display the photo. Zoom and Pan will be applied via its RenderTransform. -->
         <Image x:Name="PhotoImage" Source="{Binding ImageSource}" Stretch="Uniform" />
 
         <!-- Navigation Arrows -->
-        <Button x:Name="PreviousButton" Content="&#8249;" 
+        <Button x:Name="PreviousButton" Content="&#8249;"
                 HorizontalAlignment="Left" VerticalAlignment="Center"
                 Width="50" Height="80" Margin="10,0,0,0"
-                Background="#40000000" Foreground="White" BorderThickness="0"
+                Background="{DynamicResource ControlBackground}" Foreground="{DynamicResource TextForeground}" BorderThickness="0"
                 FontFamily="Segoe UI" FontSize="48" FontWeight="Light"
                 Opacity="0.5" Cursor="Hand"
                 Click="PreviousButton_Click">
@@ -26,17 +26,17 @@
                     <Style.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter Property="Opacity" Value="1.0" />
-                            <Setter Property="Background" Value="#60000000" />
+                            <Setter Property="Background" Value="{DynamicResource ListItemHover}" />
                         </Trigger>
                     </Style.Triggers>
                 </Style>
             </Button.Style>
         </Button>
 
-        <Button x:Name="NextButton" Content="&#8250;" 
+        <Button x:Name="NextButton" Content="&#8250;"
                 HorizontalAlignment="Right" VerticalAlignment="Center"
                 Width="50" Height="80" Margin="0,0,10,0"
-                Background="#40000000" Foreground="White" BorderThickness="0"
+                Background="{DynamicResource ControlBackground}" Foreground="{DynamicResource TextForeground}" BorderThickness="0"
                 FontFamily="Segoe UI" FontSize="48" FontWeight="Light"
                 Opacity="0.5" Cursor="Hand"
                 Click="NextButton_Click">
@@ -46,7 +46,7 @@
                     <Style.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter Property="Opacity" Value="1.0" />
-                            <Setter Property="Background" Value="#60000000" />
+                            <Setter Property="Background" Value="{DynamicResource ListItemHover}" />
                         </Trigger>
                     </Style.Triggers>
                 </Style>

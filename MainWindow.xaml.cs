@@ -23,14 +23,11 @@ namespace PhotoViewer
                 await viewModel.InitializeAsync();
 
                 // Select Gallery by default
-                var gallerySource = viewModel.Sources.FirstOrDefault(s => s.DisplayName == "Gallery");
+                var gallerySource = viewModel.Sources.OfType<SourceItemViewModel>().FirstOrDefault(s => s.DisplayName == "Gallery");
                 if (gallerySource != null)
                 {
                     viewModel.SelectedSource = gallerySource;
                 }
-
-                // Apply saved theme
-                PhotoViewer.Services.ThemeManager.ApplyTheme(viewModel.SelectedTheme);
 
                 // Listen for system theme changes
                 Microsoft.Win32.SystemEvents.UserPreferenceChanged += SystemEvents_UserPreferenceChanged;
@@ -72,31 +69,23 @@ namespace PhotoViewer
             this.Close();
         }
 
-        private void SourceListBox_ContextMenuOpening(object sender, ContextMenuEventArgs e)
-        {
-            // Only show context menu if an item is selected
-            if (SourceListBox.SelectedItem == null)
-            {
-                e.Handled = true;
-                return;
-            }
-
-            // Enable/disable Remove menu item based on selected source type
-            if (SourceListBox.SelectedItem is SourceItemViewModel source &&
-                SourceListBox.ContextMenu is ContextMenu contextMenu &&
-                contextMenu.Items[0] is MenuItem removeMenuItem)
-            {
-                removeMenuItem.IsEnabled = source.Provider is LocalFolderProvider or OneDriveProvider or GoogleDriveProvider;
-            }
-        }
-
         private void RemoveMenuItem_Click(object sender, RoutedEventArgs e)
         {
-            if (SourceListBox.SelectedItem is SourceItemViewModel selectedSource &&
-                SourceListBox.DataContext is MainWindowViewModel viewModel &&
-                viewModel.RemoveSourceCommand.CanExecute(selectedSource))
+            object? sourceToRemove = null;
+
+            // Check if the TreeView has a selected item
+            if (SourceTreeView.SelectedItem is not null)
             {
-                viewModel.RemoveSourceCommand.Execute(selectedSource);
+                sourceToRemove = SourceTreeView.SelectedItem;
+            }
+
+            if (sourceToRemove is not PhotoViewer.ViewModels.SourceItemViewModel and not PhotoViewer.ViewModels.FolderSourceViewModel)
+                return;
+
+            if (this.DataContext is PhotoViewer.ViewModels.MainWindowViewModel viewModel &&
+                viewModel.RemoveSourceCommand.CanExecute(sourceToRemove))
+            {
+                viewModel.RemoveSourceCommand.Execute(sourceToRemove);
             }
         }
 
@@ -112,34 +101,61 @@ namespace PhotoViewer
             }
         }
 
-        private void ThemeComboBox_DropDownOpened(object sender, System.EventArgs e)
+        /// <summary>
+        /// Handles TreeView selection. Determines what was clicked and sets the MainWindowViewModel.SelectedSource accordingly.
+        /// </summary>
+        private void SourceTreeView_SelectedItemChanged(object sender, System.Windows.RoutedPropertyChangedEventArgs<object> e)
         {
-            if (sender is System.Windows.Controls.ComboBox cb && cb.Template != null)
-            {
-                var popup = cb.Template.FindName("PART_Popup", cb) as System.Windows.Controls.Primitives.Popup;
-                if (popup?.Child is System.Windows.Controls.Border border)
-                {
-                    bool isDark = DataContext is MainWindowViewModel vm &&
-                        (vm.SelectedTheme == "Dark" || (vm.SelectedTheme == "System" && IsSystemDarkMode()));
+            var selectedItem = e.NewValue;
+            if (selectedItem == null) return;
 
-                    border.Background = new System.Windows.Media.SolidColorBrush(
-                        isDark ? System.Windows.Media.Color.FromRgb(43, 43, 43) : System.Windows.Media.Colors.White);
+            if (selectedItem is PhotoViewer.Models.FolderNode node)
+            {
+                if (node.RootSource is PhotoViewer.ViewModels.FolderSourceViewModel folderSource)
+                {
+                    folderSource.SelectedItem = node;
+                    if (DataContext is PhotoViewer.ViewModels.MainWindowViewModel vm)
+                    {
+                        if (vm.SelectedSource != folderSource)
+                        {
+                            // First click on this folder tree (or switching from another source)
+                            vm.SelectedSource = folderSource;
+                        }
+                        else
+                        {
+                            // Same folder tree but different subfolder — force reload
+                            vm.ReloadCurrentSource();
+                        }
+                    }
                 }
+            }
+            else if (selectedItem is PhotoViewer.ViewModels.FolderSourceViewModel rootFolderSource)
+            {
+                rootFolderSource.SelectedItem = null;
+                if (DataContext is PhotoViewer.ViewModels.MainWindowViewModel vm2)
+                {
+                    if (vm2.SelectedSource != rootFolderSource)
+                    {
+                        vm2.SelectedSource = rootFolderSource;
+                    }
+                    else
+                    {
+                        // Same folder tree but now the root is selected — force reload with all photos
+                        vm2.ReloadCurrentSource();
+                    }
+                }
+            }
+            else if (selectedItem is PhotoViewer.ViewModels.SourceItemViewModel cloudSource)
+            {
+                if (DataContext is PhotoViewer.ViewModels.MainWindowViewModel vm3)
+                    vm3.SelectedSource = cloudSource;
             }
         }
 
-        private bool IsSystemDarkMode()
+        private void ThemeComboBox_DropDownOpened(object sender, System.EventArgs e)
         {
-            try
-            {
-                using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
-                var value = key?.GetValue("AppsUseLightTheme");
-                return value != null && (int)value == 0;
-            }
-            catch
-            {
-                return false;
-            }
+            // The ComboBox popup background is handled by DynamicResource - no need for hardcoded colors here.
+            // This handler is kept for future customization if needed.
         }
     }
 }

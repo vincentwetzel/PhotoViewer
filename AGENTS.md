@@ -6,6 +6,20 @@ This document breaks down the application into its primary logical components, o
 
 ---
 
+## Theme Control Policy (STRICT)
+
+**Theme is controlled in exactly ONE place: `ThemeManager.ApplyTheme()`.** This is the final say for all color decisions.
+
+- **NO overrides allowed.** No XAML element, code-behind file, or style may hardcode colors (e.g., `#1a1a1a`, `White`, `#FF0000`) that bypass the theme system.
+- **ALL colors MUST use `{DynamicResource}` references** to theme keys defined in `App.xaml` and managed by `ThemeManager`.
+- **DWM (Desktop Window Manager) is the ultimate authority** for system theme detection. The `ThemeManager.IsSystemDarkMode()` method reads the Windows registry and is the single source of truth for system dark mode state.
+- **No component may second-guess or override the theme.** This includes PhotoWindow, MainWindow, SettingsWindow, buttons, icons, navigation arrows, popups, tooltips, and all other visual elements.
+- Violations of this policy will be rejected during code review.
+
+See [GUI Design Standards](GUI_DESIGN_STANDARDS.md) for the complete theme compliance checklist.
+
+---
+
 ### 1. Main Window Agent (Shell)
 
 This is the main application window and central controller.

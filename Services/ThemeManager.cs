@@ -62,7 +62,7 @@ namespace PhotoViewer.Services
             }
         }
 
-        private static bool IsSystemDarkMode()
+        public static bool IsSystemDarkMode()
         {
             try
             {

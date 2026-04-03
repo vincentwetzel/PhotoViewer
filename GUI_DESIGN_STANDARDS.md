@@ -8,6 +8,76 @@ This document defines the visual design standards for the PhotoViewer applicatio
 
 ---
 
+## 0. Theme Compliance (MANDATORY - READ FIRST)
+
+### Rule: Zero Theme Overrides Allowed
+
+**All colors MUST be defined through the theme system.** No hardcoded colors, no inline brushes, no DWM overrides.
+
+### The Theme System Is The Final Say
+
+1. **ThemeManager.ApplyTheme()** is the **only** place where theme colors are set.
+2. **ThemeManager.IsSystemDarkMode()** is the **only** method that detects system theme (reads DWM registry).
+3. **App.xaml** defines the default light-mode resource brushes.
+4. **All XAML elements** MUST use `{DynamicResource ResourceKey}` to reference theme colors.
+
+### Valid Theme Resource Keys
+
+| Resource Key | Purpose |
+|---|---|
+| `WindowBackground` | Main window/page backgrounds |
+| `ControlBackground` | Button, panel, and control backgrounds |
+| `TextForeground` | Text, icons, and foreground elements |
+| `BorderBrush` | Borders and dividers |
+| `MenuBackground` | Menu bar backgrounds |
+| `ListItemHover` | List item hover/selection highlight |
+
+### Strictly Forbidden
+
+```xaml
+<!-- ❌ BANNED: Hardcoded hex color -->
+<Border Background="#1a1a1a" />
+
+<!-- ❌ BANNED: Named color override -->
+<TextBlock Foreground="White" />
+
+<!-- ❌ BANNED: Inline SolidColorBrush -->
+<Button Background="{Binding MyCustomBrush}" />
+
+<!-- ❌ BANNED: DWM force in code-behind -->
+<int useDark = 1; DwmSetWindowAttribute(...); />
+```
+
+### Required Pattern
+
+```xaml
+<!-- ✅ CORRECT: DynamicResource for all colors -->
+<Border Background="{DynamicResource WindowBackground}" />
+<TextBlock Foreground="{DynamicResource TextForeground}" />
+<Button Background="{DynamicResource ControlBackground}"
+        Foreground="{DynamicResource TextForeground}">
+    <Button.Style>
+        <Style TargetType="Button">
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource ListItemHover}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Button.Style>
+</Button>
+```
+
+### Checklist for Theme Compliance
+
+- [ ] Does every `Background`, `Foreground`, `Fill`, `Stroke`, `BorderBrush` use `{DynamicResource}`?
+- [ ] Are there zero hardcoded color values (`#...`, `White`, `Black`, `Gray`, etc.) in XAML?
+- [ ] Does code-behind contain zero `SolidColorBrush` color assignments that bypass the theme system?
+- [ ] Does DWM title bar code respect the app theme (not force dark/light)?
+- [ ] Do all Style.Triggers use `{DynamicResource}` for color changes?
+
+---
+
 ## 1. Icons and Visual Symbols
 
 ### Requirement
@@ -158,9 +228,10 @@ Navigation controls should be visible but not distracting. Use subtle styling th
 ### Examples
 ```xaml
 <!-- Navigation arrow button - faint until hovered -->
-<Button Content="&#8250;" 
-        Opacity="0.5" 
-        Background="#40000000" Foreground="White"
+<Button Content="&#8250;"
+        Opacity="0.5"
+        Background="{DynamicResource ControlBackground}"
+        Foreground="{DynamicResource TextForeground}"
         HorizontalAlignment="Right" VerticalAlignment="Center">
     <Button.Style>
         <Style TargetType="Button">
@@ -168,7 +239,7 @@ Navigation controls should be visible but not distracting. Use subtle styling th
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Opacity" Value="1.0" />
-                    <Setter Property="Background" Value="#60000000" />
+                    <Setter Property="Background" Value="{DynamicResource ListItemHover}" />
                 </Trigger>
             </Style.Triggers>
         </Style>

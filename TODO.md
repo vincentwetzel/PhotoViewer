@@ -34,9 +34,6 @@ This To-Do list outlines the development plan for adding a unified gallery and m
 - [X] Persist the list of configured sources between application sessions.
 - [X] Refine UI/UX (added remove source functionality), add application icons, and improve performance with large photo collections (e.g., virtualization, caching).
 
-## Milestone 5: Deployment
-- [ ] Create an installer (e.g., using MSIX, WiX) that properly registers the application for file associations in the Windows Registry.
-
 ## Milestone 6: UI Polish and Refinements
 - [X] Add "Gallery" source that aggregates photos from all other sources.
 - [X] Default to selecting the Gallery tab on app startup.

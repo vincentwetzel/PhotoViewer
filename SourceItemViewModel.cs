@@ -21,6 +21,13 @@ namespace PhotoViewer.ViewModels
             set { _displayName = value; OnPropertyChanged(); }
         }
 
+        private int _photoCount;
+        public int PhotoCount
+        {
+            get => _photoCount;
+            set { _photoCount = value; OnPropertyChanged(); }
+        }
+
         public event PropertyChangedEventHandler? PropertyChanged;
 
         protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>

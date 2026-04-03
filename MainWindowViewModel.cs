@@ -52,13 +52,57 @@ namespace PhotoViewer.ViewModels
         private readonly SourcePersistenceService _sourcePersistenceService;
         private readonly SettingsService _settingsService;
 
-        public ObservableCollection<SourceItemViewModel> Sources { get; } = new();
+        /// <summary>Caches loaded photo items per source to avoid re-scanning on every switch.</summary>
+        private readonly Dictionary<object, PhotoCacheEntry> _photoCache = new();
+        /// <summary>How long before a cached source is considered stale and re-scanned (5 minutes).</summary>
+        private static readonly TimeSpan CacheStalenessThreshold = TimeSpan.FromMinutes(5);
 
-        private readonly ObservableCollection<PhotoItemViewModel> _photos;
+        private class PhotoCacheEntry
+        {
+            public List<PhotoItem> Items { get; set; } = new();
+            /// <summary>Fully-built view models, ready for instant display.</summary>
+            public List<PhotoItemViewModel>? ViewModels { get; set; }
+            public HashSet<string> FilePaths { get; set; } = new();
+            public DateTime CachedAt { get; set; }
+
+            /// <summary>
+            /// Checks if any cached files have been moved or deleted.
+            /// Returns true if the cache is stale.
+            /// </summary>
+            public bool IsStale()
+            {
+                if ((DateTime.UtcNow - CachedAt) > CacheStalenessThreshold)
+                    return true;
+
+                // Quick check: if more than 10% of files are missing, consider stale
+                if (FilePaths.Count == 0) return true;
+
+                int missing = 0;
+                int checkLimit = Math.Min(FilePaths.Count, 50); // Check up to 50 files
+                foreach (var path in FilePaths.Take(checkLimit))
+                {
+                    if (!File.Exists(path))
+                        missing++;
+                }
+
+                // If more than 10% of sampled files are missing, consider stale
+                return missing > checkLimit * 0.1;
+            }
+        }
+
+        /// <summary>All sources (used for aggregation in Gallery, persistence).</summary>
+        public ObservableCollection<object> Sources { get; } = new();
+        /// <summary>Collection sources: Gallery, Favorites, Recently Viewed.</summary>
+        public ObservableCollection<SourceItemViewModel> CollectionSources { get; } = new();
+        /// <summary>User sources: Folders (as FolderSourceViewModel), OneDrive, Google Drive.</summary>
+        public ObservableCollection<object> UserSources { get; } = new();
+
+        /// <summary>The photo collection displayed in the gallery view. Uses RangeObservableCollection for instant batch updates.</summary>
+        private readonly RangeObservableCollection<PhotoItemViewModel> _photos;
         public ICollectionView PhotosView { get; }
 
-        private SourceItemViewModel? _selectedSource;
-        public SourceItemViewModel? SelectedSource
+        private object? _selectedSource;
+        public object? SelectedSource
         {
             get => _selectedSource;
             set
@@ -68,6 +112,15 @@ namespace PhotoViewer.ViewModels
                 OnPropertyChanged(nameof(SelectedSource));
                 LoadPhotosForSelectedSourceAsync();
             }
+        }
+
+        /// <summary>
+        /// Forces a reload of photos for the currently selected source, even if it's the same instance.
+        /// Used when a subfolder within the same folder tree changes selection.
+        /// </summary>
+        public void ReloadCurrentSource()
+        {
+            LoadPhotosForSelectedSourceAsync();
         }
 
         public List<string> SortOptions { get; } = new List<string> { "File Name", "Date Created", "File Size" };
@@ -137,7 +190,7 @@ namespace PhotoViewer.ViewModels
             var settings = _settingsService.LoadSettings();
             _selectedTheme = settings.Theme;
 
-            _photos = new ObservableCollection<PhotoItemViewModel>();
+            _photos = new RangeObservableCollection<PhotoItemViewModel>();
             PhotosView = CollectionViewSource.GetDefaultView(_photos);
             PhotosView.Filter = FilterPhotos;
             ApplySort();
@@ -150,10 +203,13 @@ namespace PhotoViewer.ViewModels
                 AddDefaultSources();
                 LoadPersistedSources();
 
-                if (Sources.Count(s => s.Provider is not FavoritesProvider and not RecentlyViewedProvider) == 0)
+                if (Sources.OfType<SourceItemViewModel>().Count(s => s.Provider is not FavoritesProvider and not RecentlyViewedProvider) == 0)
                 {
                     await AddDefaultPicturesFolderAsync();
                 }
+
+                // Load counts for collection sources in the background
+                _ = Task.Run(async () => await LoadCollectionSourceCountsAsync());
             }
             catch (Exception ex)
             {
@@ -161,20 +217,37 @@ namespace PhotoViewer.ViewModels
             }
         }
 
+        /// <summary>
+        /// Computes and sets photo counts for all collection sources (Gallery, Favorites, Recently Viewed).
+        /// </summary>
+        private async Task LoadCollectionSourceCountsAsync()
+        {
+            foreach (var collection in CollectionSources)
+            {
+                try
+                {
+                    var photos = await collection.Provider.GetPhotoPathsAsync();
+                    var count = photos.Count();
+                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => collection.PhotoCount = count);
+                }
+                catch { }
+            }
+        }
+
         private void AddDefaultSources()
         {
-            // Add Gallery as the first source
+            // Add Gallery as the first collection source
             var galleryProvider = new GalleryProvider(Enumerable.Empty<IPhotoProvider>());
             var gallerySource = new SourceItemViewModel(galleryProvider) { DisplayName = "Gallery" };
-            Sources.Add(gallerySource);
+            CollectionSources.Add(gallerySource);
 
             var favoritesProvider = new FavoritesProvider(_favoritesService);
             var favoritesSource = new SourceItemViewModel(favoritesProvider) { DisplayName = "Favorites" };
-            Sources.Add(favoritesSource);
+            CollectionSources.Add(favoritesSource);
 
             var recentlyViewedProvider = new RecentlyViewedProvider(_historyService);
             var recentlyViewedSource = new SourceItemViewModel(recentlyViewedProvider) { DisplayName = "Recently Viewed" };
-            Sources.Add(recentlyViewedSource);
+            CollectionSources.Add(recentlyViewedSource);
         }
 
         private void ExecuteSaveLayoutCommand(object? parameter)
@@ -197,10 +270,11 @@ namespace PhotoViewer.ViewModels
                         System.Windows.Application.Current.Dispatcher.Invoke(() =>
                         {
                             var provider = new LocalFolderProvider(picturesFolder);
-                            if (!Sources.Any(s => s.Provider is LocalFolderProvider lfp && lfp.SourceName == provider.SourceName))
+                            if (!Sources.Any(s => s is FolderSourceViewModel fsv && fsv.Provider.SourceName == provider.SourceName))
                             {
-                                var newSource = new SourceItemViewModel(provider) { DisplayName = "Pictures" };
+                                var newSource = new FolderSourceViewModel(provider);
                                 Sources.Add(newSource);
+                                UserSources.Add(newSource);
                                 PersistSources();
                             }
                         });
@@ -226,10 +300,11 @@ namespace PhotoViewer.ViewModels
                         if (string.IsNullOrWhiteSpace(config.Path)) continue;
 
                         var provider = new LocalFolderProvider(config.Path);
-                        if (!Sources.Any(s => s.Provider is LocalFolderProvider lfp && lfp.SourceName == provider.SourceName))
+                        if (!Sources.Any(s => s is FolderSourceViewModel fsv && fsv.Provider.SourceName == provider.SourceName))
                         {
-                            var newSource = new SourceItemViewModel(provider) { DisplayName = config.DisplayName ?? Path.GetFileName(config.Path) };
+                            var newSource = new FolderSourceViewModel(provider);
                             Sources.Add(newSource);
+                            UserSources.Add(newSource);
                         }
                     }
                     else if (config.Type == "OneDrive")
@@ -245,14 +320,18 @@ namespace PhotoViewer.ViewModels
                                 if (authResult != null)
                                 {
                                     var oneDriveProvider = new OneDriveProvider(authResult);
-                                    if (!Sources.Any(s => s.Provider is OneDriveProvider odp && ((OneDriveSourceViewModel)s).AccountId == authResult.Account.HomeAccountId.Identifier))
+                                    if (!Sources.OfType<OneDriveSourceViewModel>().Any(s => s.AccountId == authResult.Account.HomeAccountId.Identifier))
                                     {
                                         var newSource = new OneDriveSourceViewModel(oneDriveProvider)
                                         {
                                             DisplayName = config.DisplayName,
                                             AccountId = authResult.Account.HomeAccountId.Identifier
                                         };
-                                        System.Windows.Application.Current.Dispatcher.Invoke(() => Sources.Add(newSource));
+                                        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                                        {
+                                            Sources.Add(newSource);
+                                            UserSources.Add(newSource);
+                                        });
                                     }
                                 }
                             }
@@ -275,14 +354,18 @@ namespace PhotoViewer.ViewModels
                                 if (credential != null && credential.UserId == config.Path)
                                 {
                                     var googleDriveProvider = new GoogleDriveProvider(credential);
-                                    if (!Sources.Any(s => s.Provider is GoogleDriveProvider gdp && ((GoogleDriveSourceViewModel)s).UserId == credential.UserId))
+                                    if (!Sources.OfType<GoogleDriveSourceViewModel>().Any(s => s.UserId == credential.UserId))
                                     {
                                         var newSource = new GoogleDriveSourceViewModel(googleDriveProvider)
                                         {
                                             DisplayName = config.DisplayName,
                                             UserId = credential.UserId
                                         };
-                                        System.Windows.Application.Current.Dispatcher.Invoke(() => Sources.Add(newSource));
+                                        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                                        {
+                                            Sources.Add(newSource);
+                                            UserSources.Add(newSource);
+                                        });
                                     }
                                 }
                             }
@@ -308,33 +391,33 @@ namespace PhotoViewer.ViewModels
                 var configsToSave = new List<SourceConfig>();
                 foreach (var source in Sources)
                 {
-                    if (source.Provider is LocalFolderProvider lfp)
+                    if (source is FolderSourceViewModel fsv)
                     {
                         configsToSave.Add(new SourceConfig
                         {
                             Type = "LocalFolder",
-                            Path = lfp.SourceName,
-                            DisplayName = source.DisplayName
+                            Path = fsv.Provider.SourceName,
+                            DisplayName = fsv.DisplayName
                         });
                     }
-                    else if (source.Provider is OneDriveProvider)
+                    else if (source is SourceItemViewModel svm && svm.Provider is OneDriveProvider)
                     {
                         var odsvm = (OneDriveSourceViewModel)source;
                         configsToSave.Add(new SourceConfig
                         {
                             Type = "OneDrive",
                             Path = odsvm.AccountId,
-                            DisplayName = source.DisplayName
+                            DisplayName = svm.DisplayName
                         });
                     }
-                    else if (source.Provider is GoogleDriveProvider)
+                    else if (source is SourceItemViewModel svm2 && svm2.Provider is GoogleDriveProvider)
                     {
                         var gdsvm = (GoogleDriveSourceViewModel)source;
                         configsToSave.Add(new SourceConfig
                         {
                             Type = "GoogleDrive",
                             Path = gdsvm.UserId,
-                            DisplayName = source.DisplayName
+                            DisplayName = svm2.DisplayName
                         });
                     }
                 }
@@ -385,25 +468,43 @@ namespace PhotoViewer.ViewModels
             if (vm.IsFavorite)
                 _favoritesService.AddFavorite(vm.Photo.FilePath);
             else
-                _favoritesService.RemoveFavorite(vm.Photo.FilePath); // Corrected line
+                _favoritesService.RemoveFavorite(vm.Photo.FilePath);
+
+            // Update the favorites source count
+            _ = UpdateFavoritesCountAsync();
+        }
+
+        private async Task UpdateFavoritesCountAsync()
+        {
+            var favoritesSource = CollectionSources.FirstOrDefault(s => s.DisplayName == "Favorites");
+            if (favoritesSource == null) return;
+
+            try
+            {
+                var photos = await favoritesSource.Provider.GetPhotoPathsAsync();
+                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    favoritesSource.PhotoCount = photos.Count());
+            }
+            catch { }
         }
 
         private bool CanExecuteRemoveSourceCommand(object? parameter)
         {
-            if (parameter is not SourceItemViewModel vm) return false;
-            return vm.Provider is LocalFolderProvider or OneDriveProvider or GoogleDriveProvider;
+            return parameter is SourceItemViewModel { Provider: LocalFolderProvider or OneDriveProvider or GoogleDriveProvider }
+                or FolderSourceViewModel;
         }
 
         private void ExecuteRemoveSourceCommand(object? parameter)
         {
-            if (parameter is not SourceItemViewModel sourceToRemove) return;
+            if (parameter is not SourceItemViewModel and not FolderSourceViewModel) return;
 
-            if (SelectedSource == sourceToRemove)
+            if (SelectedSource == parameter)
             {
-                SelectedSource = Sources.FirstOrDefault(s => s != sourceToRemove);
+                SelectedSource = Sources.FirstOrDefault(s => s != parameter);
             }
 
-            Sources.Remove(sourceToRemove);
+            Sources.Remove(parameter);
+            UserSources.Remove(parameter);
 
             PersistSources();
 
@@ -464,11 +565,12 @@ namespace PhotoViewer.ViewModels
             if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
                 var folderPath = dialog.SelectedPath;
-                if (!Sources.Any(s => s.Provider is LocalFolderProvider lfp && lfp.SourceName.Equals(folderPath, StringComparison.OrdinalIgnoreCase)))
+                if (!Sources.Any(s => s is FolderSourceViewModel fsv && fsv.Provider.SourceName.Equals(folderPath, StringComparison.OrdinalIgnoreCase)))
                 {
                     var provider = new LocalFolderProvider(folderPath);
-                    var newSource = new SourceItemViewModel(provider) { DisplayName = Path.GetFileName(folderPath) };
+                    var newSource = new FolderSourceViewModel(provider);
                     Sources.Add(newSource);
+                    UserSources.Add(newSource);
                     SelectedSource = newSource;
                     PersistSources();
                 }
@@ -487,6 +589,7 @@ namespace PhotoViewer.ViewModels
                     AccountId = authResult.Account.HomeAccountId.Identifier
                 };
                 Sources.Add(newSource);
+                UserSources.Add(newSource);
                 SelectedSource = newSource;
                 PersistSources();
             }
@@ -510,6 +613,7 @@ namespace PhotoViewer.ViewModels
                         UserId = credential.UserId
                     };
                     Sources.Add(newSource);
+                    UserSources.Add(newSource);
                     SelectedSource = newSource;
                     PersistSources();
                 }
@@ -524,17 +628,48 @@ namespace PhotoViewer.ViewModels
             _photoLoadingCts = new CancellationTokenSource();
             var cancellationToken = _photoLoadingCts.Token;
 
-            if (_photos.Any())
+            // If Gallery is selected
+            if (_selectedSource is SourceItemViewModel svm && svm.DisplayName == "Gallery")
             {
-                _photos.Clear();
+                if (TryLoadFromCache("gallery", out var galleryItems) && !galleryItems.IsStale())
+                {
+                    DisplayCachedItemsInstantly(galleryItems);
+                    // Refresh in background
+                    _ = RefreshSourceCacheAsync("gallery", () => LoadGalleryPhotosInternalAsync(cancellationToken));
+                    return;
+                }
+                await LoadGalleryPhotosAsync(cancellationToken);
+                return;
             }
 
-            if (_selectedSource?.Provider is not IPhotoProvider provider) return;
-
-            // If Gallery is selected, aggregate photos from all sources
-            if (_selectedSource.DisplayName == "Gallery")
+            // If FolderSourceViewModel is selected, get photos from selected folder node or entire tree
+            if (_selectedSource is FolderSourceViewModel folderSource)
             {
-                await LoadGalleryPhotosAsync(cancellationToken);
+                var selectedNode = folderSource.SelectedItem as PhotoViewer.Models.FolderNode;
+                string cacheKey = selectedNode != null
+                    ? $"folder:{folderSource.GetHashCode()}:{selectedNode.FullName}"
+                    : $"folder:{folderSource.GetHashCode()}:root";
+
+                if (TryLoadFromCache(cacheKey, out var folderItems) && !folderItems.IsStale())
+                {
+                    DisplayCachedItemsInstantly(folderItems);
+                    // Refresh in background
+                    _ = RefreshFolderCacheAsync(folderSource, selectedNode, cancellationToken);
+                    return;
+                }
+                await LoadFolderPhotosAsync(folderSource, cancellationToken);
+                return;
+            }
+
+            // For other source types (OneDrive, Google Drive, Favorites, Recently Viewed)
+            if (_selectedSource is not SourceItemViewModel { Provider: IPhotoProvider provider }) return;
+
+            string sourceKey = $"source:{_selectedSource.GetHashCode()}";
+            if (TryLoadFromCache(sourceKey, out var sourceItems) && !sourceItems.IsStale())
+            {
+                DisplayCachedItemsInstantly(sourceItems);
+                // Refresh in background
+                _ = RefreshSourceCacheAsync(sourceKey, () => LoadSourcePhotosInternalAsync(provider, cancellationToken));
                 return;
             }
 
@@ -542,48 +677,7 @@ namespace PhotoViewer.ViewModels
             {
                 var photoItems = await provider.GetPhotoPathsAsync();
                 if (cancellationToken.IsCancellationRequested) return;
-
-                await Task.Run(async () =>
-                {
-                    const int batchSize = 50;
-                    var batch = new List<PhotoItemViewModel>(batchSize);
-
-                    foreach (var item in photoItems)
-                    {
-                        if (cancellationToken.IsCancellationRequested) break;
-
-                        var vm = new PhotoItemViewModel(item)
-                        {
-                            IsFavorite = _favoritesService.IsFavorite(item.FilePath)
-                        };
-                        batch.Add(vm);
-
-                        if (batch.Count == batchSize)
-                        {
-                            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                            {
-                                if (cancellationToken.IsCancellationRequested) return;
-                                foreach (var photoVm in batch)
-                                {
-                                    _photos.Add(photoVm);
-                                }
-                            });
-                            batch.Clear();
-                        }
-                    }
-
-                    if (batch.Any() && !cancellationToken.IsCancellationRequested)
-                    {
-                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                        {
-                            if (cancellationToken.IsCancellationRequested) return;
-                            foreach (var photoVm in batch)
-                            {
-                                _photos.Add(photoVm);
-                            }
-                        });
-                    }
-                }, cancellationToken);
+                await LoadPhotoItemsAsync(photoItems, sourceKey, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -595,9 +689,30 @@ namespace PhotoViewer.ViewModels
             }
         }
 
-        private async Task LoadGalleryPhotosAsync(CancellationToken cancellationToken)
+        private async Task LoadFolderPhotosAsync(FolderSourceViewModel folderSource, CancellationToken cancellationToken)
+        {
+            var selectedNode = folderSource.SelectedItem as PhotoViewer.Models.FolderNode;
+            string cacheKey = selectedNode != null
+                ? $"folder:{folderSource.GetHashCode()}:{selectedNode.FullName}"
+                : $"folder:{folderSource.GetHashCode()}:root";
+
+            var photoPaths = await Task.Run(() => folderSource.GetSelectedPhotoPaths().ToList(), cancellationToken);
+            if (cancellationToken.IsCancellationRequested) return;
+
+            await LoadPhotoItemsAsync(photoPaths, cacheKey, cancellationToken);
+        }
+
+        private async Task LoadFolderPhotosInternalAsync(FolderSourceViewModel folderSource, PhotoViewer.Models.FolderNode? selectedNode, CancellationToken cancellationToken)
+        {
+            var photoPaths = await Task.Run(() => folderSource.GetSelectedPhotoPaths().ToList(), cancellationToken);
+            if (cancellationToken.IsCancellationRequested) return;
+            await LoadPhotoItemsAsync(photoPaths, $"folder:{folderSource.GetHashCode()}:{selectedNode?.FullName ?? "root"}", cancellationToken, refreshCache: true);
+        }
+
+        private async Task LoadGalleryPhotosInternalAsync(CancellationToken cancellationToken)
         {
             var allProviders = Sources
+                .OfType<SourceItemViewModel>()
                 .Where(s => s.DisplayName != "Gallery" && s.DisplayName != "Favorites" && s.DisplayName != "Recently Viewed")
                 .Select(s => s.Provider)
                 .ToList();
@@ -606,22 +721,107 @@ namespace PhotoViewer.ViewModels
 
             var galleryProvider = new GalleryProvider(allProviders);
             var photoItems = await galleryProvider.GetPhotoPathsAsync();
-            
             if (cancellationToken.IsCancellationRequested) return;
+            await LoadPhotoItemsAsync(photoItems, "gallery", cancellationToken, refreshCache: true);
+        }
+
+        private async Task LoadSourcePhotosInternalAsync(IPhotoProvider provider, CancellationToken cancellationToken)
+        {
+            var photoItems = await provider.GetPhotoPathsAsync();
+            if (cancellationToken.IsCancellationRequested) return;
+            await LoadPhotoItemsAsync(photoItems, $"source:{_selectedSource?.GetHashCode()}", cancellationToken, refreshCache: true);
+        }
+
+        private bool TryLoadFromCache(string cacheKey, out PhotoCacheEntry entry)
+        {
+            if (_photoCache.TryGetValue(cacheKey, out entry))
+                return entry.Items.Count > 0;
+            return false;
+        }
+
+        /// <summary>
+        /// Displays cached items instantly from the cache. Uses pre-built ViewModels for zero-delay display.
+        /// Replaces the entire collection with a single AddRange call, firing one CollectionChanged event
+        /// so the UI renders all items at once with no population animation.
+        /// </summary>
+        private void DisplayCachedItemsInstantly(PhotoCacheEntry cachedEntry)
+        {
+            // Use pre-built viewmodels if available, otherwise fall back to building them
+            var viewModels = cachedEntry.ViewModels;
+            if (viewModels == null || viewModels.Count == 0)
+            {
+                viewModels = cachedEntry.Items.Select(item =>
+                {
+                    var vm = new PhotoItemViewModel(item);
+                    vm.IsFavorite = _favoritesService.IsFavorite(item.FilePath);
+                    return vm;
+                }).ToList();
+                cachedEntry.ViewModels = viewModels;
+            }
+
+            _photos.Clear();
+            _photos.AddRange(viewModels);
+        }
+
+        private async Task RefreshSourceCacheAsync(string cacheKey, Func<Task> refreshFunc)
+        {
+            try
+            {
+                await refreshFunc();
+            }
+            catch { }
+        }
+
+        private async Task RefreshFolderCacheAsync(FolderSourceViewModel folderSource, PhotoViewer.Models.FolderNode? selectedNode, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await LoadFolderPhotosInternalAsync(folderSource, selectedNode, cancellationToken);
+            }
+            catch { }
+        }
+
+        private async Task LoadPhotoItemsAsync(IEnumerable<PhotoItem> photoItems, string cacheKey, CancellationToken cancellationToken, bool refreshCache = false)
+        {
+            if (_photos.Any())
+            {
+                _photos.Clear();
+            }
+
+            var itemList = photoItems.ToList();
+
+            // Build viewmodels and cache them
+            var viewModels = new List<PhotoItemViewModel>(itemList.Count);
+            foreach (var item in itemList)
+            {
+                if (cancellationToken.IsCancellationRequested) break;
+                var vm = new PhotoItemViewModel(item)
+                {
+                    IsFavorite = _favoritesService.IsFavorite(item.FilePath)
+                };
+                viewModels.Add(vm);
+            }
+
+            if (cancellationToken.IsCancellationRequested) return;
+
+            // Update cache
+            var entry = new PhotoCacheEntry
+            {
+                Items = itemList,
+                ViewModels = viewModels,
+                FilePaths = new HashSet<string>(itemList.Select(p => p.FilePath)),
+                CachedAt = DateTime.UtcNow
+            };
+            _photoCache[cacheKey] = entry;
 
             await Task.Run(async () =>
             {
                 const int batchSize = 50;
                 var batch = new List<PhotoItemViewModel>(batchSize);
 
-                foreach (var item in photoItems)
+                foreach (var vm in viewModels)
                 {
                     if (cancellationToken.IsCancellationRequested) break;
-
-                    var vm = new PhotoItemViewModel(item)
-                    {
-                        IsFavorite = _favoritesService.IsFavorite(item.FilePath)
-                    };
                     batch.Add(vm);
 
                     if (batch.Count == batchSize)
@@ -630,9 +830,7 @@ namespace PhotoViewer.ViewModels
                         {
                             if (cancellationToken.IsCancellationRequested) return;
                             foreach (var photoVm in batch)
-                            {
                                 _photos.Add(photoVm);
-                            }
                         });
                         batch.Clear();
                     }
@@ -642,14 +840,44 @@ namespace PhotoViewer.ViewModels
                 {
                     await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                     {
-                        if (cancellationToken.IsCancellationRequested) return;
                         foreach (var photoVm in batch)
-                        {
                             _photos.Add(photoVm);
-                        }
                     });
                 }
             }, cancellationToken);
+        }
+
+        /// <summary>
+        /// Overload that accepts file paths (for folder tree selection).
+        /// </summary>
+        private async Task LoadPhotoItemsAsync(IEnumerable<string> filePaths, string cacheKey, CancellationToken cancellationToken, bool refreshCache = false)
+        {
+            var photoItems = filePaths.Select(fp =>
+            {
+                try
+                {
+                    return new PhotoItem(fp, Path.GetFileName(fp), File.GetCreationTime(fp), new FileInfo(fp).Length, 0, 0);
+                }
+                catch { return null; }
+            }).Where(p => p != null).Select(p => p!);
+
+            await LoadPhotoItemsAsync(photoItems, cacheKey, cancellationToken, refreshCache);
+        }
+
+        private async Task LoadGalleryPhotosAsync(CancellationToken cancellationToken)
+        {
+            var allProviders = Sources
+                .OfType<SourceItemViewModel>()
+                .Where(s => s.DisplayName != "Gallery" && s.DisplayName != "Favorites" && s.DisplayName != "Recently Viewed")
+                .Select(s => s.Provider)
+                .ToList();
+
+            if (!allProviders.Any()) return;
+
+            var galleryProvider = new GalleryProvider(allProviders);
+            var photoItems = await galleryProvider.GetPhotoPathsAsync();
+            if (cancellationToken.IsCancellationRequested) return;
+            await LoadPhotoItemsAsync(photoItems, "gallery", cancellationToken);
         }
 
         private void ExecuteOpenSettingsCommand(object? parameter)
