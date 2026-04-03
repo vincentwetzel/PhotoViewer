@@ -23,7 +23,7 @@ namespace PhotoViewer
                 await viewModel.InitializeAsync();
 
                 // Select Gallery by default
-                var gallerySource = viewModel.Sources.OfType<SourceItemViewModel>().FirstOrDefault(s => s.DisplayName == "Gallery");
+                var gallerySource = viewModel.CollectionSources.FirstOrDefault(s => s.DisplayName == "Gallery");
                 if (gallerySource != null)
                 {
                     viewModel.SelectedSource = gallerySource;
