@@ -89,6 +89,33 @@ namespace PhotoViewer
             }
         }
 
+        /// <summary>
+        /// Handles chevron click to expand/collapse folder trees.
+        /// Only the chevron triggers expand/collapse; clicking the row selects it.
+        /// </summary>
+        private void Chevron_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+
+            // Find the parent TreeViewItem
+            var depObj = sender as System.Windows.DependencyObject;
+            TreeViewItem? treeViewItem = null;
+            while (depObj != null)
+            {
+                if (depObj is TreeViewItem tvi)
+                {
+                    treeViewItem = tvi;
+                    break;
+                }
+                depObj = System.Windows.Media.VisualTreeHelper.GetParent(depObj);
+            }
+
+            if (treeViewItem != null)
+            {
+                treeViewItem.IsExpanded = !treeViewItem.IsExpanded;
+            }
+        }
+
         private void PhotoListBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
             // Only open if an item was added to the selection (not removed)
