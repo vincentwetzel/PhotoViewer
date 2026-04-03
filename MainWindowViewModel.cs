@@ -866,11 +866,22 @@ namespace PhotoViewer.ViewModels
 
         private async Task LoadGalleryPhotosAsync(CancellationToken cancellationToken)
         {
-            var allProviders = Sources
-                .OfType<SourceItemViewModel>()
-                .Where(s => s.DisplayName != "Gallery" && s.DisplayName != "Favorites" && s.DisplayName != "Recently Viewed")
-                .Select(s => s.Provider)
-                .ToList();
+            var allProviders = new List<IPhotoProvider>();
+
+            // Collect providers from folder sources
+            foreach (var source in Sources.OfType<FolderSourceViewModel>())
+            {
+                allProviders.Add(source.Provider);
+            }
+
+            // Collect providers from cloud sources (OneDrive, Google Drive, etc.)
+            foreach (var source in Sources.OfType<SourceItemViewModel>())
+            {
+                if (source.DisplayName != "Gallery" && source.DisplayName != "Favorites" && source.DisplayName != "Recently Viewed")
+                {
+                    allProviders.Add(source.Provider);
+                }
+            }
 
             if (!allProviders.Any()) return;
 
