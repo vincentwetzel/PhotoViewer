@@ -48,6 +48,7 @@ This agent is a single window responsible for displaying one image.
 - Support deleting the current photo to Recycle Bin (Delete key).
 - Store its own state: file path, window position (X, Y), size (Width, Height), and image zoom/pan state.
 - Can be created, moved, resized, and closed independently.
+- Fully theme-compliant — all colors use `{DynamicResource}` from the theme system. No hardcoded colors.
 
 ---
 
@@ -84,3 +85,30 @@ This is a non-visual agent that handles saving and loading application settings.
 - Persist application settings (e.g., theme preference) to a JSON file in `%LOCALAPPDATA%\PhotoViewer\`.
 - Load saved settings on application startup.
 - Provide the `ThemeManager` with the user's theme preference to apply Light, Dark, or System theme.
+
+---
+
+### 6. Folder Source Agent (FolderSourceViewModel + FolderNode)
+
+This agent manages the expandable folder tree hierarchy for local folder sources.
+
+**Responsibilities:**
+- Build a tree of `FolderNode` objects from a root folder path, with lazy-loaded subfolders.
+- Each `FolderNode` tracks its photo count, subfolder count, expansion state, and a reference to its parent `FolderSourceViewModel`.
+- When a subfolder is selected, aggregate photo paths from that folder and all its descendants.
+- When the root is selected, aggregate photo paths from the entire folder tree.
+- Each node's `RootSource` property links it back to its owning `FolderSourceViewModel` for reliable selection handling.
+- All color values use `{DynamicResource}` — no hardcoded theme colors.
+
+---
+
+### 7. Photo Cache Agent (in MainWindowViewModel)
+
+This is a non-visual caching system for loaded photo items.
+
+**Responsibilities:**
+- Cache `PhotoItemViewModel` instances per source/subfolder using a `Dictionary<object, PhotoCacheEntry>`.
+- On first visit: scan the source, build viewmodels, cache them, display with batching.
+- On revisit: instantly display cached viewmodels via `RangeObservableCollection.AddRange()` (zero population animation).
+- Kick off a background refresh after displaying cached content to catch file changes.
+- Staleness detection: 5-minute timeout + sampling up to 50 files for existence (invalidates if >10% missing).

@@ -34,6 +34,16 @@ This To-Do list outlines the development plan for adding a unified gallery and m
 - [X] Persist the list of configured sources between application sessions.
 - [X] Refine UI/UX (added remove source functionality), add application icons, and improve performance with large photo collections (e.g., virtualization, caching).
 
+## Milestone 5: Source Navigation Overhaul
+- [X] Separate navigation pane into "Collections" (Gallery, Favorites, Recently Viewed) and "Sources" (folders, cloud accounts).
+- [X] Replace flat source list with expandable folder tree for local folders.
+- [X] Folder tree with right-aligned chevrons (click to expand/collapse, single click to select).
+- [X] Chevron state: down (collapsed) → up (expanded) for nested folders.
+- [X] Photo counts displayed on all sources (Gallery, Favorites, cloud accounts, subfolders).
+- [X] Photo caching — instant display on revisit, no re-scanning.
+- [X] Staleness detection (5-minute timeout + missing file sampling).
+- [X] `RangeObservableCollection` for atomic batch display (zero population animation).
+
 ## Milestone 6: UI Polish and Refinements
 - [X] Add "Gallery" source that aggregates photos from all other sources.
 - [X] Default to selecting the Gallery tab on app startup.
@@ -63,3 +73,11 @@ This To-Do list outlines the development plan for adding a unified gallery and m
 - Photo navigation arrows in PhotoWindow.
 - Justified gallery layout with true aspect ratio display (`JustifiedWrapPanel`).
 - Pixel dimension reading from image files for accurate aspect ratios.
+- Strict theme compliance: zero hardcoded colors, all `{DynamicResource}`.
+- Global ContextMenu and MenuItem styles — universal theming with no per-control overrides.
+- Navigation pane split into Collections (Gallery, Favorites, Recently Viewed) and Sources (folders, cloud).
+- Expandable folder tree view for local folder sources with right-aligned chevrons.
+- Single-click chevron toggle for expand/collapse; single-click row for selection.
+- Photo count badges on all sources and subfolders.
+- Photo caching with `RangeObservableCollection` — instant display on revisit, background refresh for staleness.
+- Staleness detection: 5-minute timeout + missing file sampling threshold.

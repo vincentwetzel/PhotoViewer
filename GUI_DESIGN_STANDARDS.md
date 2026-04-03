@@ -263,6 +263,43 @@ Before committing any new UI feature, verify:
 
 ---
 
+## 10. Folder Tree Navigation
+
+### Requirement
+Local folder sources display as an expandable tree hierarchy (similar to Windows Explorer) with clear expand/collapse indicators.
+
+### Guidelines
+- **Chevron placement**: Right-aligned in each folder row, separate from the folder icon and name.
+- **Chevron shape**: Filled `Path` using `{DynamicResource TextForeground}` — no stroked lines.
+- **Chevron direction**:
+  - `∨` pointing **down** when collapsed (indicates folder can be expanded).
+  - `∧` pointing **up** when expanded (indicates folder can be collapsed).
+- **Chevron visibility**: Hidden for leaf folders (no subfolders).
+- **Interaction**: Clicking the chevron toggles expand/collapse only. Clicking the folder row selects it and loads its photos.
+- **Indentation**: Nested subfolders indented by 18px per level; the chevron stays right-aligned regardless of depth.
+- **Hover**: Row background highlights via `{DynamicResource ListItemHover}` on hover/selection.
+- **No cursor override**: Do not change the cursor style on chevrons — use the default system cursor.
+
+### Examples
+```xaml
+<!-- Folder node with right-aligned chevron -->
+<DockPanel LastChildFill="True">
+    <Path x:Name="Chevron" DockPanel.Dock="Right"
+          Width="14" Height="10"
+          Data="M 0 0 L 7 7 L 14 0 L 10 0 L 7 3 L 4 0 Z"
+          Fill="{DynamicResource TextForeground}"
+          VerticalAlignment="Center" />
+    <StackPanel Orientation="Horizontal">
+        <ContentPresenter Content="{StaticResource IconFolder}" />
+        <TextBlock Text="{Binding Name}" />
+        <TextBlock Text="{Binding PhotoCount}" Opacity="0.5" />
+    </StackPanel>
+</DockPanel>
+<!-- When expanded: Data="M 0 7 L 7 0 L 14 7 L 10 7 L 7 4 L 4 7 Z" -->
+```
+
+---
+
 ## Resources
 
 ### Icon Libraries
