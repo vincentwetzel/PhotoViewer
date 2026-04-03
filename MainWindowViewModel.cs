@@ -883,11 +883,22 @@ namespace PhotoViewer.ViewModels
                 }
             }
 
-            if (!allProviders.Any()) return;
+            if (!allProviders.Any())
+            {
+                var gallerySource = CollectionSources.FirstOrDefault(s => s.DisplayName == "Gallery");
+                if (gallerySource != null) gallerySource.PhotoCount = 0;
+                return;
+            }
 
             var galleryProvider = new GalleryProvider(allProviders);
             var photoItems = await galleryProvider.GetPhotoPathsAsync();
             if (cancellationToken.IsCancellationRequested) return;
+
+            // Update Gallery count
+            var galleryItem = CollectionSources.FirstOrDefault(s => s.DisplayName == "Gallery");
+            if (galleryItem != null)
+                galleryItem.PhotoCount = photoItems.Count();
+
             await LoadPhotoItemsAsync(photoItems, "gallery", cancellationToken);
         }
 
