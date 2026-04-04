@@ -48,6 +48,8 @@ This is the main application window and central controller.
 - Display photos in a justified gallery layout using `JustifiedWrapPanel` (variable widths based on actual aspect ratios, flush row edges).
 - Persist and restore main window size across sessions via `MainWindowSizeService`.
 - Maximize behavior respects the taskbar by using `SystemParameters.WorkArea`.
+- **Auto-save workspace layout** on close — all open PhotoWindows (position, size, zoom, pan, maximized state) are persisted and restored on next launch.
+- **Manual Save/Load Layout** via File menu — users can export/import workspace layouts to JSON files.
 
 ---
 
@@ -75,11 +77,17 @@ This agent is a single window responsible for displaying one image.
 This is a non-visual agent that handles the logic for saving and loading workspace layouts.
 
 **Responsibilities:**
-- Collect state data from all active `PhotoWindow` instances.
+- Collect state data from all active `PhotoWindow` instances (file path, position, size, zoom, pan, maximized state).
 - Serialize this collection of data into a JSON format.
-- Write the JSON data to a specified file path.
-- Read a JSON layout file and deserialize it into a data structure.
+- Write the JSON data to a specified file path via `SaveLayout()`.
+- Read a JSON layout file and deserialize it into a data structure via `LoadLayout()`.
 - Provide the deserialized data to the `Main Window Agent` to reconstruct the workspace.
+- **Auto-save on exit**: When the main window closes, the current layout is automatically saved to `%LOCALAPPDATA%\PhotoViewer\workspaceLayout.json`.
+- **Auto-restore on startup**: When the app launches, any previously saved layout is automatically restored, reopening all PhotoWindows in their exact previous state.
+- **Manual Save/Load**: Users can manually save layouts to any file via **File → Save Layout...** and load them back via **File → Load Layout...**.
+- **Multi-monitor support**: Window positions use WPF virtual screen coordinates (supports negative values for monitors to the left), so windows restore to the correct monitor.
+- **Maximized state**: Captures and restores whether a window was maximized using `RestoreBounds` for pre-maximize dimensions.
+- **Graceful degradation**: Files that no longer exist are silently skipped during restore.
 
 ---
 

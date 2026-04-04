@@ -14,6 +14,7 @@ using System.Linq;
 using System.Windows.Data;
 using System.Windows;
 using System.Diagnostics;
+using Microsoft.Win32;
 
 namespace PhotoViewer.ViewModels
 {
@@ -43,6 +44,7 @@ namespace PhotoViewer.ViewModels
         }
 
         private readonly ObservableCollection<PhotoWindowViewModel> _openPhotoWindows = new();
+        private readonly List<PhotoWindow> _openPhotoWindowsList = new();
         private readonly LayoutService _layoutService;
         private readonly PhotoWindowSizeService _photoWindowSizeService;
         private readonly MainWindowSizeService _mainWindowSizeService;
@@ -217,10 +219,38 @@ namespace PhotoViewer.ViewModels
 
                 // Load counts for collection sources in the background
                 _ = Task.Run(async () => await LoadCollectionSourceCountsAsync());
+
+                // Restore previously saved layout on startup (if it exists)
+                RestoreLayoutOnStartup();
             }
             catch (Exception ex)
             {
                 System.Windows.MessageBox.Show($"Startup error: {ex.Message}\n\n{ex.StackTrace}", "Initialization Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// Restores the last saved layout on application startup.
+        /// </summary>
+        private void RestoreLayoutOnStartup()
+        {
+            if (!_layoutService.HasDefaultLayout())
+                return;
+
+            var layout = _layoutService.LoadDefaultLayout();
+            if (layout == null || layout.PhotoWindows.Count == 0)
+                return;
+
+            // Restore each window with a small delay to avoid overwhelming the system
+            foreach (var windowState in layout.PhotoWindows)
+            {
+                if (windowState == null || string.IsNullOrEmpty(windowState.FilePath))
+                    continue;
+
+                if (!File.Exists(windowState.FilePath))
+                    continue;
+
+                OpenPhotoWindowFromState(windowState);
             }
         }
 
@@ -259,10 +289,186 @@ namespace PhotoViewer.ViewModels
 
         private void ExecuteSaveLayoutCommand(object? parameter)
         {
+            if (_openPhotoWindowsList.Count == 0)
+            {
+                System.Windows.MessageBox.Show("No photo windows are currently open.", "Save Layout", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var saveDialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "Save Workspace Layout",
+                Filter = "JSON Files|*.json|All Files|*.*",
+                DefaultExt = "json",
+                FileName = "PhotoViewerLayout.json"
+            };
+
+            if (saveDialog.ShowDialog() == true)
+            {
+                try
+                {
+                    var layout = _layoutService.CollectLayout(_openPhotoWindowsList);
+                    _layoutService.SaveLayout(layout, saveDialog.FileName);
+                    // Also save as the default layout for auto-restore on next startup
+                    _layoutService.SaveDefaultLayout(layout);
+                    System.Windows.MessageBox.Show($"Layout saved successfully.\n\n{layout.PhotoWindows.Count} window(s) saved.", "Save Layout", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                catch (Exception ex)
+                {
+                    System.Windows.MessageBox.Show($"Failed to save layout: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
         }
 
         private void ExecuteLoadLayoutCommand(object? parameter)
         {
+            var openDialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Load Workspace Layout",
+                Filter = "JSON Files|*.json|All Files|*.*",
+                DefaultExt = "json",
+                Multiselect = false
+            };
+
+            if (openDialog.ShowDialog() == true)
+            {
+                LoadLayoutFromFile(openDialog.FileName);
+            }
+        }
+
+        /// <summary>
+        /// Loads a layout from a JSON file and restores all PhotoWindows.
+        /// </summary>
+        private void LoadLayoutFromFile(string filePath)
+        {
+            var layout = _layoutService.LoadLayout(filePath);
+            if (layout == null || layout.PhotoWindows.Count == 0)
+            {
+                System.Windows.MessageBox.Show("No valid layout data found in the file.", "Load Layout", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            // Close all currently open photo windows
+            CloseAllPhotoWindows();
+
+            int restoredCount = 0;
+            int skippedCount = 0;
+
+            foreach (var windowState in layout.PhotoWindows)
+            {
+                if (windowState == null || string.IsNullOrEmpty(windowState.FilePath))
+                    continue;
+
+                if (!File.Exists(windowState.FilePath))
+                {
+                    skippedCount++;
+                    continue;
+                }
+
+                OpenPhotoWindowFromState(windowState);
+                restoredCount++;
+            }
+
+            var message = $"Layout restored successfully.\n\n{restoredCount} window(s) opened.";
+            if (skippedCount > 0)
+            {
+                message += $"\n{skippedCount} file(s) not found and were skipped.";
+            }
+            System.Windows.MessageBox.Show(message, "Load Layout", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        /// <summary>
+        /// Opens a single PhotoWindow from saved state.
+        /// </summary>
+        private void OpenPhotoWindowFromState(PhotoWindowState state)
+        {
+            var photoWindowViewModel = new PhotoWindowViewModel { FilePath = state.FilePath };
+            var photoWindow = new PhotoWindow
+            {
+                DataContext = photoWindowViewModel
+            };
+
+            // Apply saved transform state
+            photoWindow.LoadImage(state.FilePath, state.ZoomLevel, state.PanOffsetX, state.PanOffsetY);
+
+            // Apply saved window position and size
+            photoWindow.Left = state.Left;
+            photoWindow.Top = state.Top;
+            photoWindow.Width = state.Width;
+            photoWindow.Height = state.Height;
+
+            // Track this window
+            _openPhotoWindows.Add(photoWindowViewModel);
+            _openPhotoWindowsList.Add(photoWindow);
+
+            // Handle window close
+            photoWindow.Closed += (sender, e) =>
+            {
+                _openPhotoWindows.Remove(photoWindowViewModel);
+                _openPhotoWindowsList.Remove(photoWindow);
+            };
+
+            photoWindow.Show();
+
+            // Maximize if it was saved as maximized
+            // Use Dispatcher to ensure window is fully shown first
+            if (state.IsMaximized)
+            {
+                System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    photoWindow.WindowState = WindowState.Maximized;
+                }), System.Windows.Threading.DispatcherPriority.Background);
+            }
+        }
+
+        /// <summary>
+        /// Closes all currently open photo windows.
+        /// </summary>
+        private void CloseAllPhotoWindows()
+        {
+            var windows = _openPhotoWindowsList.ToList(); // Copy to avoid modification during iteration
+            foreach (var window in windows)
+            {
+                try
+                {
+                    window.Close();
+                }
+                catch { /* Ignore errors during close */ }
+            }
+            _openPhotoWindowsList.Clear();
+            _openPhotoWindows.Clear();
+        }
+
+        /// <summary>
+        /// Auto-saves the current layout when the main window is closing.
+        /// </summary>
+        public void SaveCurrentLayout()
+        {
+            if (_openPhotoWindowsList.Count == 0)
+            {
+                // If no windows are open, clear any saved layout
+                if (_layoutService.HasDefaultLayout())
+                {
+                    try
+                    {
+                        System.IO.File.Delete(System.IO.Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                            "PhotoViewer", "workspaceLayout.json"));
+                    }
+                    catch { }
+                }
+                return;
+            }
+
+            try
+            {
+                var layout = _layoutService.CollectLayout(_openPhotoWindowsList);
+                _layoutService.SaveDefaultLayout(layout);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to auto-save layout on exit: {ex.Message}");
+            }
         }
 
         private async Task AddDefaultPicturesFolderAsync()
@@ -541,11 +747,13 @@ namespace PhotoViewer.ViewModels
                 photoWindow.Height = savedSize.Height;
 
                 _openPhotoWindows.Add(photoWindowViewModel);
-                
+                _openPhotoWindowsList.Add(photoWindow);
+
                 // Save window size when closed
                 photoWindow.Closed += (sender, e) =>
                 {
                     _openPhotoWindows.Remove(photoWindowViewModel);
+                    _openPhotoWindowsList.Remove(photoWindow);
                     _photoWindowSizeService.SaveSize(photoWindow.Width, photoWindow.Height);
                 };
 

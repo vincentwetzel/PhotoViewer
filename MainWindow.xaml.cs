@@ -32,6 +32,12 @@ namespace PhotoViewer
         {
             _windowSizeService.SaveSize(this.Width, this.Height);
             Microsoft.Win32.SystemEvents.UserPreferenceChanged -= SystemEvents_UserPreferenceChanged;
+
+            // Auto-save the current layout of photo windows
+            if (DataContext is MainWindowViewModel viewModel)
+            {
+                viewModel.SaveCurrentLayout();
+            }
         }
 
         private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -134,7 +140,7 @@ namespace PhotoViewer
         /// Only the chevron triggers expand/collapse; clicking the row selects it.
         /// Refreshes subfolders from disk before expanding to pick up external changes.
         /// </summary>
-        private void Chevron_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        private void Chevron_MouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
             e.Handled = true;
 

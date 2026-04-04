@@ -16,6 +16,11 @@
 
         public double Height { get; set; }
 
+        /// <summary>
+        /// Whether the window was maximized when saved.
+        /// </summary>
+        public bool IsMaximized { get; set; }
+
         // Default to 1.0 (100%) zoom if not specified.
         public double ZoomLevel { get; set; } = 1.0;
 

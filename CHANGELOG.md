@@ -8,17 +8,12 @@ and this project adheres to Semantic Versioning.
 ## [Unreleased]
 
 ### Added
-- **Gallery View**: "Gallery" source option that aggregates photos from all configured sources into one unified view.
-- **Settings System**: Persistent application settings stored in `%LOCALAPPDATA%\PhotoViewer\settings.json`.
-- **Theme Support**: Light, Dark, and System theme options accessible via the Settings cog in the title bar.
-- **Custom Title Bar**: Full custom title bar with window title, Settings cog, minimize, maximize, and close buttons.
-- **Favorites as Heart Icons**: Heart-shaped favorite/unfavorite buttons on gallery thumbnails and in the source navigation pane.
-- **Sort Direction Toggle**: Ascending/Descending sort order option alongside the existing Sort By dropdown.
-- **Settings Window**: Simple settings dialog with theme selector that applies changes in real-time.
-- **Persistent Window Sizing**: Both the main gallery window and individual photo windows remember their size across sessions. Window sizes are stored in `%LOCALAPPDATA%\PhotoViewer\`.
-- **Taskbar-Respecting Maximize**: Both main and photo windows respect the taskbar when maximized, using `SystemParameters.WorkArea` instead of covering it.
+- **Workspace Save/Load**: Open photo windows are automatically saved on exit and restored on next launch — including position, size, zoom level, pan state, and maximized state. Full multi-monitor support via virtual screen coordinates.
+- **Manual Layout Save/Load**: **File → Save Layout...** and **File → Load Layout...** menu items let you export/import workspace layouts to/from JSON files.
+- **Chevron Click Fix**: Folder tree expand/collapse chevrons now respond reliably on the first click (changed from `MouseLeftButtonDown` to `MouseLeftButtonUp`).
 
 ### Changed
+- **Left Panel Sizing Increased**: Default width 220→280, min 150→200, max 400→500. Icons enlarged (16→20, 18→22), font sizes increased (10→12, 11→13, 13→15), padding and spacing expanded throughout for a more comfortable reading experience.
 - **Default Launch View**: Application now opens directly to the Gallery tab instead of requiring manual selection.
 - **Photo Window Navigation**: Left/right navigation arrows are now visible as faint overlay buttons on the photo window edges.
 - **Gallery Opens on Single Click**: Selecting a photo in the gallery now opens it immediately (changed from double-click).

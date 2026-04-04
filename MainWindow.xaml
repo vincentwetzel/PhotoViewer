@@ -125,37 +125,37 @@
         <!-- Data Templates for source types -->
         <DataTemplate x:Key="FolderSourceTemplate">
             <StackPanel Orientation="Horizontal">
-                <ContentPresenter Content="{StaticResource IconFolder}" Width="16" Height="16" Margin="0,0,8,0" />
+                <ContentPresenter Content="{StaticResource IconFolder}" Width="20" Height="20" Margin="0,0,10,0" />
                 <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="6,0,0,0"
-                           FontSize="10" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
+                <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="8,0,0,0"
+                           FontSize="12" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
             </StackPanel>
         </DataTemplate>
 
         <DataTemplate x:Key="OneDriveSourceTemplate" DataType="{x:Type viewModels:OneDriveSourceViewModel}">
             <StackPanel Orientation="Horizontal">
-                <ContentPresenter Content="{StaticResource IconOneDrive}" Width="16" Height="16" Margin="0,0,8,0" />
+                <ContentPresenter Content="{StaticResource IconOneDrive}" Width="20" Height="20" Margin="0,0,10,0" />
                 <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="6,0,0,0"
-                           FontSize="10" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
+                <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="8,0,0,0"
+                           FontSize="12" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
             </StackPanel>
         </DataTemplate>
 
         <DataTemplate x:Key="GoogleDriveSourceTemplate" DataType="{x:Type viewModels:GoogleDriveSourceViewModel}">
             <StackPanel Orientation="Horizontal">
-                <ContentPresenter Content="{StaticResource IconGoogleDrive}" Width="16" Height="16" Margin="0,0,8,0" />
+                <ContentPresenter Content="{StaticResource IconGoogleDrive}" Width="20" Height="20" Margin="0,0,10,0" />
                 <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="6,0,0,0"
-                           FontSize="10" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
+                <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="8,0,0,0"
+                           FontSize="12" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
             </StackPanel>
         </DataTemplate>
 
         <DataTemplate x:Key="GenericSourceTemplate">
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="&#10084;" Foreground="{DynamicResource TextForeground}" FontFamily="Segoe UI Symbol" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" />
+                <TextBlock Text="&#10084;" Foreground="{DynamicResource TextForeground}" FontFamily="Segoe UI Symbol" FontSize="20" Margin="0,0,10,0" VerticalAlignment="Center" />
                 <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="6,0,0,0"
-                           FontSize="10" Foreground="{DynamicResource TextForeground}" Opacity="0.5">
+                <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="8,0,0,0"
+                           FontSize="12" Foreground="{DynamicResource TextForeground}" Opacity="0.5">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock">
                             <Setter Property="Visibility" Value="Visible" />
@@ -172,10 +172,10 @@
 
         <DataTemplate x:Key="GallerySourceTemplate">
             <StackPanel Orientation="Horizontal">
-                <ContentPresenter Content="{StaticResource IconGallery}" Width="16" Height="16" Margin="0,0,8,0" />
+                <ContentPresenter Content="{StaticResource IconGallery}" Width="20" Height="20" Margin="0,0,10,0" />
                 <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="6,0,0,0"
-                           FontSize="10" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
+                <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="8,0,0,0"
+                           FontSize="12" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
             </StackPanel>
         </DataTemplate>
 
@@ -287,8 +287,8 @@
                 <MenuItem Header="File" Foreground="{DynamicResource TextForeground}">
                     <MenuItem Header="_Open Image(s)..." Command="{Binding OpenImageCommand}" />
                     <Separator />
-                    <MenuItem Header="_Save Layout..." Command="{Binding SaveLayoutCommand}" IsEnabled="False" />
-                    <MenuItem Header="_Load Layout..." Command="{Binding LoadLayoutCommand}" IsEnabled="False" />
+                    <MenuItem Header="_Save Layout..." Command="{Binding SaveLayoutCommand}" />
+                    <MenuItem Header="_Load Layout..." Command="{Binding LoadLayoutCommand}" />
                     <Separator />
                     <MenuItem Header="E_xit" Click="Exit_Click" />
                 </MenuItem>
@@ -303,7 +303,7 @@
 
             <Grid Grid.Row="1" Background="{DynamicResource ControlBackground}">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="220" MinWidth="150" MaxWidth="400" /> <!-- Source Navigation Pane -->
+                <ColumnDefinition Width="280" MinWidth="200" MaxWidth="500" /> <!-- Source Navigation Pane -->
                 <ColumnDefinition Width="Auto" /> <!-- GridSplitter -->
                 <ColumnDefinition Width="*" />    <!-- Photo Grid -->
             </Grid.ColumnDefinitions>
@@ -321,7 +321,7 @@
                              Foreground="{DynamicResource TextForeground}">
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem">
-                                <Setter Property="Padding" Value="12,4,8,4" />
+                                <Setter Property="Padding" Value="16,6,12,6" />
                                 <Setter Property="Foreground" Value="{DynamicResource TextForeground}" />
                                 <Setter Property="BorderThickness" Value="0" />
                             </Style>
@@ -329,7 +329,7 @@
                     </ListBox>
 
                     <!-- Divider Line -->
-                    <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="12,4,12,4" />
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="16,6,16,6" />
 
                     <!-- User Sources: Folder trees + Cloud accounts -->
                     <TreeView x:Name="SourceTreeView"
@@ -346,7 +346,7 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <ContentPresenter Width="18" Height="18" Margin="0,0,8,0">
+                                        <ContentPresenter Width="22" Height="22" Margin="0,0,10,0">
                                             <ContentPresenter.Style>
                                                 <Style TargetType="ContentPresenter">
                                                     <Setter Property="Content" Value="{StaticResource IconFolder}" />
@@ -358,10 +358,10 @@
                                                 </Style>
                                             </ContentPresenter.Style>
                                         </ContentPresenter>
-                                        <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" FontSize="13" />
+                                        <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" FontSize="15" />
                                     </StackPanel>
-                                    <TextBlock Grid.Column="1" Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="8,0,0,0"
-                                               FontSize="11" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
+                                    <TextBlock Grid.Column="1" Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="10,0,0,0"
+                                               FontSize="13" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
                                 </Grid>
                             </HierarchicalDataTemplate>
 
@@ -371,17 +371,17 @@
                                 <DockPanel LastChildFill="True">
                                     <!-- Right-aligned chevron — click to expand/collapse -->
                                     <Path x:Name="RootChevron" DockPanel.Dock="Right"
-                                          Width="14" Height="10" Margin="4,0,6,0"
+                                          Width="18" Height="13" Margin="6,0,8,0"
                                           Data="M 0 0 L 7 7 L 14 0 L 10 0 L 7 3 L 4 0 Z"
                                           Fill="{DynamicResource TextForeground}"
                                           VerticalAlignment="Center"
-                                          MouseLeftButtonDown="Chevron_MouseLeftButtonDown" />
+                                          MouseLeftButtonUp="Chevron_MouseLeftButtonUp" />
                                     <!-- Left: folder icon and name -->
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <ContentPresenter Content="{StaticResource IconFolder}" Width="18" Height="18" Margin="0,0,8,0" />
-                                        <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="13" />
-                                        <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="6,0,0,0"
-                                                   FontSize="11" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
+                                        <ContentPresenter Content="{StaticResource IconFolder}" Width="22" Height="22" Margin="0,0,10,0" />
+                                        <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="15" />
+                                        <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="8,0,0,0"
+                                                   FontSize="13" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
                                     </StackPanel>
                                 </DockPanel>
                                 <HierarchicalDataTemplate.Triggers>
@@ -401,17 +401,17 @@
                                 <DockPanel LastChildFill="True">
                                     <!-- Right-aligned chevron — click to expand/collapse -->
                                     <Path x:Name="Chevron" DockPanel.Dock="Right"
-                                          Width="14" Height="10" Margin="4,0,6,0"
+                                          Width="18" Height="13" Margin="6,0,8,0"
                                           Data="M 0 0 L 7 7 L 14 0 L 10 0 L 7 3 L 4 0 Z"
                                           Fill="{DynamicResource TextForeground}"
                                           VerticalAlignment="Center"
-                                          MouseLeftButtonDown="Chevron_MouseLeftButtonDown" />
+                                          MouseLeftButtonUp="Chevron_MouseLeftButtonUp" />
                                     <!-- Left: folder icon, name, count -->
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <ContentPresenter Content="{StaticResource IconFolder}" Width="16" Height="16" Margin="0,0,8,0" />
-                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" FontSize="13" />
-                                        <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="6,0,0,0"
-                                                   FontSize="11" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
+                                        <ContentPresenter Content="{StaticResource IconFolder}" Width="20" Height="20" Margin="0,0,10,0" />
+                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" FontSize="15" />
+                                        <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="8,0,0,0"
+                                                   FontSize="13" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
                                     </StackPanel>
                                 </DockPanel>
                                 <HierarchicalDataTemplate.Triggers>
@@ -442,7 +442,7 @@
                                                         </Grid.RowDefinitions>
                                                         <Border x:Name="HeaderBorder" Grid.Row="0"
                                                                 Background="Transparent"
-                                                                CornerRadius="4" Padding="4,3"
+                                                                CornerRadius="6" Padding="8,6"
                                                                 HorizontalAlignment="Stretch">
                                                             <ContentPresenter x:Name="PART_Header"
                                                                               ContentSource="Header"
@@ -450,7 +450,7 @@
                                                         </Border>
                                                         <ItemsPresenter x:Name="ItemsHost"
                                                                         Grid.Row="1"
-                                                                        Margin="18,0,0,0"
+                                                                        Margin="24,0,0,0"
                                                                         Visibility="Collapsed" />
                                                     </Grid>
                                                     <ControlTemplate.Triggers>
@@ -489,7 +489,7 @@
                                                 </Grid.RowDefinitions>
                                                 <Border x:Name="HeaderBorder" Grid.Row="0"
                                                         Background="Transparent"
-                                                        CornerRadius="4" Padding="4,3"
+                                                        CornerRadius="6" Padding="8,6"
                                                         HorizontalAlignment="Stretch">
                                                     <ContentPresenter x:Name="PART_Header"
                                                                       ContentSource="Header"
@@ -497,7 +497,7 @@
                                                 </Border>
                                                 <ItemsPresenter x:Name="ItemsHost"
                                                                 Grid.Row="1"
-                                                                Margin="18,0,0,0"
+                                                                Margin="24,0,0,0"
                                                                 Visibility="Collapsed" />
                                             </Grid>
                                             <ControlTemplate.Triggers>
