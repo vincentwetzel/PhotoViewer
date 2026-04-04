@@ -126,6 +126,8 @@ This agent manages the expandable folder tree hierarchy for local folder sources
 - Each node's `RootSource` property links it back to its owning `FolderSourceViewModel` for reliable selection handling.
 - **Real-time tree updates**: `FolderSourceViewModel` uses a `FileSystemWatcher` on the root path (with `IncludeSubdirectories = true`) to detect folder create/delete/rename events. Changes are debounced (500ms) and trigger a recursive tree refresh (`RefreshSubFoldersRecursive`) so new/removed folders appear instantly — no clicks or restart needed.
 - `FolderSourceViewModel` implements `IDisposable` — watcher is cleaned up when a source is removed.
+- **Chevron click behavior**: Clicking directly on a folder's expand/collapse chevron toggles expand/collapse without changing the currently selected folder (the right panel view remains unchanged). Clicking elsewhere on an expandable folder row toggles expand/collapse AND selects the folder. Subfolder clicks always select normally. Root-level `TreeViewItem` `PreviewMouseLeftButtonDown` handles expandable folders, chevron `Path` `PreviewMouseLeftButtonDown` handles chevron-specific clicks with selection suppression via a `_suppressSelectionChanged` flag.
+- **Icon usage**: Folder tree uses a chevron arrow (▶/▼) for expand/collapse indicators. The "Recently Viewed" collection uses a clock/history icon, while "Favorites" uses a heart icon.
 - All color values use `{DynamicResource}` — no hardcoded theme colors.
 
 ---

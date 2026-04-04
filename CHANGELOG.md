@@ -10,7 +10,8 @@ and this project adheres to Semantic Versioning.
 ### Added
 - **Workspace Save/Load**: Open photo windows are automatically saved on exit and restored on next launch — including position, size, zoom level, pan state, and maximized state. Full multi-monitor support via virtual screen coordinates.
 - **Manual Layout Save/Load**: **File → Save Layout...** and **File → Load Layout...** menu items let you export/import workspace layouts to/from JSON files.
-- **Chevron Click Fix**: Folder tree expand/collapse chevrons now respond reliably on the first click (changed from `MouseLeftButtonDown` to `MouseLeftButtonUp`).
+- **Recently Viewed Clock Icon**: The "Recently Viewed" collection now uses a clock/history icon instead of a heart, making it visually distinct from Favorites.
+- **Chevron Click Refinement**: Clicking directly on a folder's expand/collapse chevron toggles the folder state without changing the currently selected folder (the right panel remains unchanged). Clicking elsewhere on an expandable folder still selects it. Subfolder clicks always select normally.
 
 ### Changed
 - **Left Panel Sizing Increased**: Default width 220→280, min 150→200, max 400→500. Icons enlarged (16→20, 18→22), font sizes increased (10→12, 11→13, 13→15), padding and spacing expanded throughout for a more comfortable reading experience.

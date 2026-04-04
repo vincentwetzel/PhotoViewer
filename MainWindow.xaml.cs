@@ -8,6 +8,7 @@ namespace PhotoViewer
     public partial class MainWindow : Window
     {
         private readonly MainWindowSizeService _windowSizeService;
+        private bool _suppressSelectionChanged; // Set during chevron clicks to block selection change
 
         public MainWindow(MainWindowViewModel viewModel)
         {
@@ -135,46 +136,6 @@ namespace PhotoViewer
             }
         }
 
-        /// <summary>
-        /// Handles chevron click to expand/collapse folder trees.
-        /// Only the chevron triggers expand/collapse; clicking the row selects it.
-        /// Refreshes subfolders from disk before expanding to pick up external changes.
-        /// </summary>
-        private void Chevron_MouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            e.Handled = true;
-
-            // Find the parent TreeViewItem
-            var depObj = sender as System.Windows.DependencyObject;
-            TreeViewItem? treeViewItem = null;
-            while (depObj != null)
-            {
-                if (depObj is TreeViewItem tvi)
-                {
-                    treeViewItem = tvi;
-                    break;
-                }
-                depObj = System.Windows.Media.VisualTreeHelper.GetParent(depObj);
-            }
-
-            if (treeViewItem != null)
-            {
-                bool expanding = !treeViewItem.IsExpanded;
-                if (expanding)
-                {
-                    if (treeViewItem.DataContext is PhotoViewer.Models.FolderNode node)
-                    {
-                        node.RefreshSubFoldersRecursive();
-                    }
-                    else if (treeViewItem.DataContext is PhotoViewer.ViewModels.FolderSourceViewModel folderSource)
-                    {
-                        folderSource.RefreshTree();
-                    }
-                }
-                treeViewItem.IsExpanded = expanding;
-            }
-        }
-
         private void PhotoListBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
             // Only open if an item was added to the selection (not removed)
@@ -188,10 +149,138 @@ namespace PhotoViewer
         }
 
         /// <summary>
+        /// Handles clicks directly on the chevron. Toggles expand/collapse and blocks selection.
+        /// </summary>
+        private void Chevron_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+
+            // Find the parent TreeViewItem
+            var depObj = sender as System.Windows.DependencyObject;
+            System.Windows.Controls.TreeViewItem? tvi = null;
+            while (depObj != null)
+            {
+                if (depObj is System.Windows.Controls.TreeViewItem item)
+                {
+                    tvi = item;
+                    break;
+                }
+                depObj = System.Windows.Media.VisualTreeHelper.GetParent(depObj);
+            }
+
+            if (tvi == null) return;
+
+            // Toggle expand/collapse
+            tvi.IsExpanded = !tvi.IsExpanded;
+
+            // Refresh from disk when expanding
+            if (tvi.IsExpanded)
+            {
+                if (tvi.DataContext is PhotoViewer.Models.FolderNode node)
+                {
+                    node.RefreshSubFoldersRecursive();
+                }
+                else if (tvi.DataContext is PhotoViewer.ViewModels.FolderSourceViewModel fs)
+                {
+                    fs.RefreshTree();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Intercepts mouse clicks on root-level TreeViewItems to handle expandable folders.
+        /// Only fires for clicks directly on the root item itself, not on its subfolder children.
+        /// </summary>
+        private void TreeViewItem_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            var tvi = sender as System.Windows.Controls.TreeViewItem;
+            if (tvi == null) return;
+
+            // Check if the click originated on a child TreeViewItem (subfolder).
+            // If so, skip handling — let the subfolder's own selection logic run.
+            var originalSource = e.OriginalSource as System.Windows.DependencyObject;
+            while (originalSource != null && originalSource != tvi)
+            {
+                if (originalSource is System.Windows.Controls.TreeViewItem)
+                    return;
+                originalSource = System.Windows.Media.VisualTreeHelper.GetParent(originalSource);
+            }
+
+            // Check if the click was directly on the chevron Path.
+            bool isChevronClick = false;
+            var origSrc = e.OriginalSource;
+            if (origSrc is System.Windows.Shapes.Path path && "Chevron".Equals(path.Tag))
+            {
+                isChevronClick = true;
+            }
+
+            if (isChevronClick)
+            {
+                // Suppress the selection change event
+                _suppressSelectionChanged = true;
+
+                // Toggle expand/collapse
+                tvi.IsExpanded = !tvi.IsExpanded;
+
+                // Refresh from disk when expanding
+                if (tvi.IsExpanded)
+                {
+                    if (tvi.DataContext is PhotoViewer.Models.FolderNode node)
+                        node.RefreshSubFoldersRecursive();
+                    else if (tvi.DataContext is PhotoViewer.ViewModels.FolderSourceViewModel fs)
+                        fs.RefreshTree();
+                }
+
+                // Clear the suppression flag after the SelectedItemChanged event fires
+                Dispatcher.BeginInvoke(new Action(() => _suppressSelectionChanged = false),
+                    System.Windows.Threading.DispatcherPriority.Input);
+
+                e.Handled = true;
+                return;
+            }
+
+            // Check if this item has subfolders
+            bool hasSubFolders = false;
+            if (tvi.DataContext is PhotoViewer.Models.FolderNode node2)
+            {
+                hasSubFolders = node2.HasSubFolders;
+            }
+            else if (tvi.DataContext is PhotoViewer.ViewModels.FolderSourceViewModel folderSource)
+            {
+                hasSubFolders = folderSource.Root?.HasSubFolders ?? false;
+            }
+
+            if (hasSubFolders)
+            {
+                // Toggle expand/collapse
+                tvi.IsExpanded = !tvi.IsExpanded;
+
+                // Refresh from disk when expanding
+                if (tvi.IsExpanded)
+                {
+                    if (tvi.DataContext is PhotoViewer.Models.FolderNode subNode)
+                    {
+                        subNode.RefreshSubFoldersRecursive();
+                    }
+                    else if (tvi.DataContext is PhotoViewer.ViewModels.FolderSourceViewModel fs)
+                    {
+                        fs.RefreshTree();
+                    }
+                }
+
+                // Let selection proceed normally
+            }
+            // If no subfolders, let the event bubble normally for selection
+        }
+
+        /// <summary>
         /// Handles TreeView selection. Determines what was clicked and sets the MainWindowViewModel.SelectedSource accordingly.
         /// </summary>
         private void SourceTreeView_SelectedItemChanged(object sender, System.Windows.RoutedPropertyChangedEventArgs<object> e)
         {
+            // Skip if this was triggered by a chevron click
+            if (_suppressSelectionChanged) return;
+
             var selectedItem = e.NewValue;
             if (selectedItem == null) return;
 

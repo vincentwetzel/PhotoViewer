@@ -152,7 +152,18 @@
 
         <DataTemplate x:Key="GenericSourceTemplate">
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="&#10084;" Foreground="{DynamicResource TextForeground}" FontFamily="Segoe UI Symbol" FontSize="20" Margin="0,0,10,0" VerticalAlignment="Center" />
+                <Path Width="20" Height="20" Margin="0,0,10,0" VerticalAlignment="Center" Stretch="Uniform" Fill="{DynamicResource TextForeground}">
+                    <Path.Style>
+                        <Style TargetType="Path">
+                            <Setter Property="Data" Value="M12,21.35l-1.45-1.32C5.4,15.36 2,12.28 2,8.5 2,5.42 4.42,3 7.5,3c1.74,0 3.41,0.81 4.5,2.09C13.09,3.81 14.76,3 16.5,3 19.58,3 22,5.42 22,8.5c0,3.78 -3.4,6.86 -8.55,11.54L12,21.35z" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DisplayName}" Value="Recently Viewed">
+                                    <Setter Property="Data" Value="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M16.2,16.2L11,13V7H12.5V12.2L17,14.9L16.2,16.2Z" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Path.Style>
+                </Path>
                 <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" />
                 <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="8,0,0,0"
                            FontSize="12" Foreground="{DynamicResource TextForeground}" Opacity="0.5">
@@ -368,28 +379,38 @@
                             <!-- Template for folder source root -->
                             <HierarchicalDataTemplate DataType="{x:Type viewModels:FolderSourceViewModel}"
                                                       ItemsSource="{Binding Root.SubFolders}">
-                                <DockPanel LastChildFill="True">
-                                    <!-- Right-aligned chevron — click to expand/collapse -->
-                                    <Path x:Name="RootChevron" DockPanel.Dock="Right"
-                                          Width="18" Height="13" Margin="6,0,8,0"
-                                          Data="M 0 0 L 7 7 L 14 0 L 10 0 L 7 3 L 4 0 Z"
-                                          Fill="{DynamicResource TextForeground}"
-                                          VerticalAlignment="Center"
-                                          MouseLeftButtonUp="Chevron_MouseLeftButtonUp" />
-                                    <!-- Left: folder icon and name -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <ContentPresenter Content="{StaticResource IconFolder}" Width="22" Height="22" Margin="0,0,10,0" />
                                         <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="15" />
                                         <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="8,0,0,0"
                                                    FontSize="13" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
                                     </StackPanel>
-                                </DockPanel>
+                                    <Path x:Name="RootChevron" Grid.Column="1" Width="16" Height="10" Margin="6,0,4,0"
+                                          Tag="Chevron"
+                                          Data="M 0 0 L 7 7 L 14 0 L 10 0 L 7 3 L 4 0 Z"
+                                          Fill="{DynamicResource TextForeground}"
+                                          VerticalAlignment="Center"
+                                          PreviewMouseLeftButtonDown="Chevron_PreviewMouseLeftButtonDown">
+                                        <Path.Style>
+                                            <Style TargetType="Path">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Root.HasSubFolders}" Value="False">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Path.Style>
+                                    </Path>
+                                </Grid>
                                 <HierarchicalDataTemplate.Triggers>
-                                    <DataTrigger Binding="{Binding Root.HasSubFolders}" Value="False">
-                                        <Setter TargetName="RootChevron" Property="Visibility" Value="Collapsed" />
-                                    </DataTrigger>
                                     <!-- When expanded, point up -->
-                                    <DataTrigger Binding="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type TreeViewItem}}, Path=IsExpanded}" Value="True">
+                                    <DataTrigger Binding="{Binding Root.IsExpanded}" Value="True">
                                         <Setter TargetName="RootChevron" Property="Data" Value="M 0 7 L 7 0 L 14 7 L 10 7 L 7 4 L 4 7 Z" />
                                     </DataTrigger>
                                 </HierarchicalDataTemplate.Triggers>
@@ -398,14 +419,11 @@
                             <!-- Template for subfolder nodes -->
                             <HierarchicalDataTemplate DataType="{x:Type models:FolderNode}"
                                                       ItemsSource="{Binding SubFolders}">
-                                <DockPanel LastChildFill="True">
-                                    <!-- Right-aligned chevron — click to expand/collapse -->
-                                    <Path x:Name="Chevron" DockPanel.Dock="Right"
-                                          Width="18" Height="13" Margin="6,0,8,0"
-                                          Data="M 0 0 L 7 7 L 14 0 L 10 0 L 7 3 L 4 0 Z"
-                                          Fill="{DynamicResource TextForeground}"
-                                          VerticalAlignment="Center"
-                                          MouseLeftButtonUp="Chevron_MouseLeftButtonUp" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
                                     <!-- Left: folder icon, name, count -->
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <ContentPresenter Content="{StaticResource IconFolder}" Width="20" Height="20" Margin="0,0,10,0" />
@@ -413,13 +431,27 @@
                                         <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="8,0,0,0"
                                                    FontSize="13" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
                                     </StackPanel>
-                                </DockPanel>
+                                    <Path x:Name="Chevron" Grid.Column="1" Width="16" Height="10" Margin="6,0,4,0"
+                                          Tag="Chevron"
+                                          Data="M 0 0 L 7 7 L 14 0 L 10 0 L 7 3 L 4 0 Z"
+                                          Fill="{DynamicResource TextForeground}"
+                                          VerticalAlignment="Center"
+                                          PreviewMouseLeftButtonDown="Chevron_PreviewMouseLeftButtonDown">
+                                        <Path.Style>
+                                            <Style TargetType="Path">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasSubFolders}" Value="False">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Path.Style>
+                                    </Path>
+                                </Grid>
                                 <HierarchicalDataTemplate.Triggers>
-                                    <DataTrigger Binding="{Binding HasSubFolders}" Value="False">
-                                        <Setter TargetName="Chevron" Property="Visibility" Value="Collapsed" />
-                                    </DataTrigger>
-                                    <!-- When expanded, point up — bind to TreeViewItem.IsExpanded for reliable updates -->
-                                    <DataTrigger Binding="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type TreeViewItem}}, Path=IsExpanded}" Value="True">
+                                    <!-- When expanded, point up -->
+                                    <DataTrigger Binding="{Binding IsExpanded}" Value="True">
                                         <Setter TargetName="Chevron" Property="Data" Value="M 0 7 L 7 0 L 14 7 L 10 7 L 7 4 L 4 7 Z" />
                                     </DataTrigger>
                                 </HierarchicalDataTemplate.Triggers>
@@ -475,6 +507,7 @@
                         </TreeView.Resources>
                         <TreeView.ItemContainerStyle>
                             <Style TargetType="TreeViewItem">
+                                <EventSetter Event="PreviewMouseLeftButtonDown" Handler="TreeViewItem_PreviewMouseLeftButtonDown" />
                                 <Setter Property="Padding" Value="0" />
                                 <Setter Property="BorderThickness" Value="0" />
                                 <Setter Property="Foreground" Value="{DynamicResource TextForeground}" />
