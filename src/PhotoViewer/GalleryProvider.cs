@@ -1,6 +1,7 @@
 using PhotoViewer.Models;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace PhotoViewer.Services;
@@ -19,15 +20,22 @@ public class GalleryProvider : IPhotoProvider
         _providers = providers;
     }
 
-    public async Task<IEnumerable<PhotoItem>> GetPhotoPathsAsync()
+    public Task<IEnumerable<PhotoItem>> GetPhotoPathsAsync()
+    {
+        return GetPhotoPathsAsync(CancellationToken.None);
+    }
+
+    public async Task<IEnumerable<PhotoItem>> GetPhotoPathsAsync(CancellationToken cancellationToken)
     {
         var allPhotos = new List<PhotoItem>();
 
         foreach (var provider in _providers)
         {
+            if (cancellationToken.IsCancellationRequested) break;
+
             try
             {
-                var photos = await provider.GetPhotoPathsAsync();
+                var photos = await provider.GetPhotoPathsAsync(cancellationToken);
                 allPhotos.AddRange(photos);
             }
             catch

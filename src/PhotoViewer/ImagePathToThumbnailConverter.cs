@@ -6,30 +6,30 @@ using System.Windows.Media.Imaging;
 
 namespace PhotoViewer.Converters
 {
+    /// <summary>
+    /// Ultra-fast thumbnail converter with zero blocking I/O checks.
+    /// </summary>
     public class ImagePathToThumbnailConverter : IValueConverter
     {
         public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            if (value is not string imagePath || string.IsNullOrEmpty(imagePath) || !File.Exists(imagePath))
-            {
+            if (value is not string imagePath || string.IsNullOrEmpty(imagePath))
                 return null;
-            }
 
             try
             {
                 var bitmapImage = new BitmapImage();
                 bitmapImage.BeginInit();
                 bitmapImage.UriSource = new Uri(imagePath);
-                bitmapImage.DecodePixelWidth = 500; // Larger thumbnail for better quality when scaled
+                bitmapImage.DecodePixelWidth = 500; // Original quality - performance gains come from removing file I/O, not image quality
                 bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
-                bitmapImage.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+                bitmapImage.CreateOptions = BitmapCreateOptions.DelayCreation;
                 bitmapImage.EndInit();
-                bitmapImage.Freeze(); // Freeze for performance benefits on background threads
+                bitmapImage.Freeze();
                 return bitmapImage;
             }
             catch
             {
-                // Return null if the image is corrupt or cannot be loaded.
                 return null;
             }
         }

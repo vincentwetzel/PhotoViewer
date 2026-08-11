@@ -56,6 +56,18 @@ namespace PhotoViewer.ViewModels
         private readonly SourcePersistenceService _sourcePersistenceService;
         private readonly SettingsService _settingsService;
 
+        private bool _isLoading;
+        public bool IsLoading
+        {
+            get => _isLoading;
+            set
+            {
+                if (_isLoading == value) return;
+                _isLoading = value;
+                OnPropertyChanged(nameof(IsLoading));
+            }
+        }
+
         /// <summary>Provides access to the main window size service for the MainWindow.</summary>
         public MainWindowSizeService MainWindowSizeService => _mainWindowSizeService;
 
@@ -107,6 +119,17 @@ namespace PhotoViewer.ViewModels
         /// <summary>The photo collection displayed in the gallery view. Uses RangeObservableCollection for instant batch updates.</summary>
         private readonly RangeObservableCollection<PhotoItemViewModel> _photos;
         public ICollectionView PhotosView { get; }
+
+        /// <summary>Batch size for progressive UI updates when loading large sources.</summary>
+        private const int UiUpdateBatchSize = 200;
+
+        /// <summary>Total count of ALL photos from the current source (including those not displayed).</summary>
+        private int _totalPhotoCount;
+        public int TotalPhotoCount
+        {
+            get => _totalPhotoCount;
+            set { _totalPhotoCount = value; OnPropertyChanged(nameof(TotalPhotoCount)); }
+        }
 
         private object? _selectedSource;
         public object? SelectedSource
@@ -217,8 +240,9 @@ namespace PhotoViewer.ViewModels
                     await AddDefaultPicturesFolderAsync();
                 }
 
-                // Load counts for collection sources in the background
-                _ = Task.Run(async () => await LoadCollectionSourceCountsAsync());
+                // Photo counts are calculated on-demand when user expands/clicks folders.
+                // NOT on startup — recursive file enumeration for large sources causes disk I/O saturation.
+                // _ = Task.Run(async () => await LoadCollectionSourceCountsAsync());
 
                 // Restore previously saved layout on startup (if it exists)
                 RestoreLayoutOnStartup();
@@ -256,6 +280,7 @@ namespace PhotoViewer.ViewModels
 
         /// <summary>
         /// Computes and sets photo counts for all collection sources (Gallery, Favorites, Recently Viewed).
+        /// For Gallery, uses a fast estimate instead of full enumeration to avoid freezing on large sources.
         /// </summary>
         private async Task LoadCollectionSourceCountsAsync()
         {
@@ -263,9 +288,17 @@ namespace PhotoViewer.ViewModels
             {
                 try
                 {
-                    var photos = await collection.Provider.GetPhotoPathsAsync();
-                    var count = photos.Count();
-                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => collection.PhotoCount = count);
+                    if (collection.DisplayName == "Gallery")
+                    {
+                        // Don't enumerate all 25,000 files on startup - show "..." instead
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => collection.PhotoCount = -1); // -1 means "loading/unknown"
+                    }
+                    else
+                    {
+                        var photos = await collection.Provider.GetPhotoPathsAsync();
+                        var count = photos.Count();
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => collection.PhotoCount = count);
+                    }
                 }
                 catch { }
             }
@@ -489,6 +522,9 @@ namespace PhotoViewer.ViewModels
                                 Sources.Add(newSource);
                                 UserSources.Add(newSource);
                                 PersistSources();
+                                
+                                // Kick off async count in background
+                                _ = newSource.CalculatePhotoCountAsync();
                             }
                         });
                     }
@@ -503,6 +539,7 @@ namespace PhotoViewer.ViewModels
         private void LoadPersistedSources()
         {
             var sourceConfigs = _sourcePersistenceService.LoadSources();
+            var folderViewModelsToCount = new List<FolderSourceViewModel>();
 
             foreach (var config in sourceConfigs)
             {
@@ -518,6 +555,7 @@ namespace PhotoViewer.ViewModels
                             var newSource = new FolderSourceViewModel(provider);
                             Sources.Add(newSource);
                             UserSources.Add(newSource);
+                            folderViewModelsToCount.Add(newSource);
                         }
                     }
                     else if (config.Type == "OneDrive")
@@ -595,6 +633,10 @@ namespace PhotoViewer.ViewModels
                     System.Windows.MessageBox.Show($"Failed to load source config '{config.DisplayName}': {ex.Message}", "Source Load Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
                 }
             }
+
+            // Photo counts are NOT calculated on startup — recursive file enumeration for large sources
+            // saturates disk I/O and makes startup unbearably slow. Counts will appear as 0 until
+            // the user interacts with the folder tree (counts are calculated on-demand when needed).
         }
 
         private void PersistSources()
@@ -859,64 +901,89 @@ namespace PhotoViewer.ViewModels
             _photoLoadingCts = new CancellationTokenSource();
             var cancellationToken = _photoLoadingCts.Token;
 
-            // If Gallery is selected
-            if (_selectedSource is SourceItemViewModel svm && svm.DisplayName == "Gallery")
-            {
-                if (TryLoadFromCache("gallery", out var galleryItems) && !galleryItems.IsStale())
-                {
-                    DisplayCachedItemsInstantly(galleryItems);
-                    // Refresh in background
-                    _ = RefreshSourceCacheAsync("gallery", () => LoadGalleryPhotosInternalAsync(cancellationToken));
-                    return;
-                }
-                await LoadGalleryPhotosAsync(cancellationToken);
-                return;
-            }
-
-            // If FolderSourceViewModel is selected, get photos from selected folder node or entire tree
-            if (_selectedSource is FolderSourceViewModel folderSource)
-            {
-                var selectedNode = folderSource.SelectedItem as PhotoViewer.Models.FolderNode;
-                string cacheKey = selectedNode != null
-                    ? $"folder:{folderSource.GetHashCode()}:{selectedNode.FullName}"
-                    : $"folder:{folderSource.GetHashCode()}:root";
-
-                if (TryLoadFromCache(cacheKey, out var folderItems) && !folderItems.IsStale())
-                {
-                    DisplayCachedItemsInstantly(folderItems);
-                    // Refresh in background
-                    _ = RefreshFolderCacheAsync(folderSource, selectedNode, cancellationToken);
-                    return;
-                }
-                await LoadFolderPhotosAsync(folderSource, cancellationToken);
-                return;
-            }
-
-            // For other source types (OneDrive, Google Drive, Favorites, Recently Viewed)
-            if (_selectedSource is not SourceItemViewModel { Provider: IPhotoProvider provider }) return;
-
-            string sourceKey = $"source:{_selectedSource.GetHashCode()}";
-            if (TryLoadFromCache(sourceKey, out var sourceItems) && !sourceItems.IsStale())
-            {
-                DisplayCachedItemsInstantly(sourceItems);
-                // Refresh in background
-                _ = RefreshSourceCacheAsync(sourceKey, () => LoadSourcePhotosInternalAsync(provider, cancellationToken));
-                return;
-            }
+            IsLoading = true;
 
             try
             {
-                var photoItems = await provider.GetPhotoPathsAsync();
-                if (cancellationToken.IsCancellationRequested) return;
-                await LoadPhotoItemsAsync(photoItems, sourceKey, cancellationToken);
+                // If Gallery is selected
+                if (_selectedSource is SourceItemViewModel svm && svm.DisplayName == "Gallery")
+                {
+                    if (TryLoadFromCache("gallery", out var galleryItems) && !galleryItems.IsStale())
+                    {
+                        DisplayCachedItemsInstantly(galleryItems);
+                        // Refresh in background
+                        _ = RefreshSourceCacheAsync("gallery", () => LoadGalleryPhotosInternalAsync(cancellationToken));
+                        return;
+                    }
+                    await LoadGalleryPhotosAsync(cancellationToken);
+                    return;
+                }
+
+                // If FolderSourceViewModel is selected, get photos from selected folder node or entire tree
+                if (_selectedSource is FolderSourceViewModel folderSource)
+                {
+                    var selectedNode = folderSource.SelectedItem as PhotoViewer.Models.FolderNode;
+                    string cacheKey = selectedNode != null
+                        ? $"folder:{folderSource.GetHashCode()}:{selectedNode.FullName}"
+                        : $"folder:{folderSource.GetHashCode()}:root";
+
+                    if (TryLoadFromCache(cacheKey, out var folderItems) && !folderItems.IsStale())
+                    {
+                        DisplayCachedItemsInstantly(folderItems);
+                        // Refresh in background
+                        _ = RefreshFolderCacheAsync(folderSource, selectedNode, cancellationToken);
+                        return;
+                    }
+
+                    try
+                    {
+                        await LoadFolderPhotosAsync(folderSource, cancellationToken);
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        // Expected - user switched sources
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Expected - user switched sources
+                    }
+                    return;
+                }
+
+                // For other source types (OneDrive, Google Drive, Favorites, Recently Viewed)
+                if (_selectedSource is not SourceItemViewModel { Provider: IPhotoProvider provider }) return;
+
+                string sourceKey = $"source:{_selectedSource.GetHashCode()}";
+                if (TryLoadFromCache(sourceKey, out var sourceItems) && !sourceItems.IsStale())
+                {
+                    DisplayCachedItemsInstantly(sourceItems);
+                    // Refresh in background
+                    _ = RefreshSourceCacheAsync(sourceKey, () => LoadSourcePhotosInternalAsync(provider, cancellationToken));
+                    return;
+                }
+
+                try
+                {
+                    var photoItems = await provider.GetPhotoPathsAsync(cancellationToken);
+                    if (cancellationToken.IsCancellationRequested) return;
+                    await LoadPhotoItemsAsync(photoItems, sourceKey, cancellationToken);
+                }
+                catch (TaskCanceledException)
+                {
+                    // Expected - user switched sources
+                }
+                catch (OperationCanceledException)
+                {
+                    // Expected - user switched sources
+                }
+                catch (Exception ex)
+                {
+                    System.Windows.MessageBox.Show($"Error loading photos: {ex.Message}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                }
             }
-            catch (OperationCanceledException)
+            finally
             {
-                // Task was cancelled, which is expected.
-            }
-            catch (Exception ex)
-            {
-                System.Windows.MessageBox.Show($"Error loading photos: {ex.Message}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                IsLoading = false;
             }
         }
 
@@ -927,17 +994,27 @@ namespace PhotoViewer.ViewModels
                 ? $"folder:{folderSource.GetHashCode()}:{selectedNode.FullName}"
                 : $"folder:{folderSource.GetHashCode()}:root";
 
-            var photoPaths = await Task.Run(() => folderSource.GetSelectedPhotoPaths().ToList(), cancellationToken);
-            if (cancellationToken.IsCancellationRequested) return;
+            // If root is selected (null), use provider's fast progressive enumeration
+            // If specific folder is selected, use FolderNode's enumeration
+            Func<IEnumerable<string>> enumeratorFactory = selectedNode == null
+                ? () => folderSource.Provider.EnumeratePhotoPathsProgressively()
+                : () => folderSource.GetSelectedPhotoPaths();
 
-            await LoadPhotoItemsAsync(photoPaths, cacheKey, cancellationToken);
+            await LoadPhotoItemsProgressivelyAsync(enumeratorFactory, cacheKey, cancellationToken);
         }
 
         private async Task LoadFolderPhotosInternalAsync(FolderSourceViewModel folderSource, PhotoViewer.Models.FolderNode? selectedNode, CancellationToken cancellationToken)
         {
-            var photoPaths = await Task.Run(() => folderSource.GetSelectedPhotoPaths().ToList(), cancellationToken);
-            if (cancellationToken.IsCancellationRequested) return;
-            await LoadPhotoItemsAsync(photoPaths, $"folder:{folderSource.GetHashCode()}:{selectedNode?.FullName ?? "root"}", cancellationToken, refreshCache: true);
+            // Use provider's fast progressive enumeration when at root
+            Func<IEnumerable<string>> enumeratorFactory = selectedNode == null
+                ? () => folderSource.Provider.EnumeratePhotoPathsProgressively()
+                : () => folderSource.GetSelectedPhotoPaths();
+
+            await LoadPhotoItemsProgressivelyAsync(
+                enumeratorFactory,
+                $"folder:{folderSource.GetHashCode()}:{selectedNode?.FullName ?? "root"}", 
+                cancellationToken,
+                refreshCache: true);
         }
 
         private async Task LoadGalleryPhotosInternalAsync(CancellationToken cancellationToken)
@@ -950,17 +1027,212 @@ namespace PhotoViewer.ViewModels
 
             if (!allProviders.Any()) return;
 
-            var galleryProvider = new GalleryProvider(allProviders);
-            var photoItems = await galleryProvider.GetPhotoPathsAsync();
-            if (cancellationToken.IsCancellationRequested) return;
-            await LoadPhotoItemsAsync(photoItems, "gallery", cancellationToken, refreshCache: true);
+            // Load providers progressively - don't wait for all to finish
+            await LoadGalleryPhotosProgressivelyAsync(allProviders, cancellationToken);
+        }
+
+        /// <summary>
+        /// Loads gallery photos by processing each provider sequentially.
+        /// For local folders, uses progressive enumeration to stream results immediately.
+        /// Caps display at MaxDisplayItems and stops enumeration early to avoid scanning all files.
+        /// </summary>
+        private async Task LoadGalleryPhotosProgressivelyAsync(List<IPhotoProvider> providers, CancellationToken cancellationToken)
+        {
+            // Clear current display
+            if (_photos.Any())
+            {
+                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _photos.Clear());
+            }
+
+            var allItems = new List<PhotoItem>();
+            var allViewModels = new List<PhotoItemViewModel>();
+            var allFilePaths = new HashSet<string>();
+            var displayCounter = new DisplayCounter { Count = 0 };
+            const int maxCacheSize = int.MaxValue; // No cap
+
+            // Clear gallery cache
+            _photoCache.Remove("gallery");
+
+            const int batchSize = 200;
+            var uiUpdateQueue = new Queue<PhotoItemViewModel>();
+            var flushTimer = System.Diagnostics.Stopwatch.StartNew();
+
+            // Process providers SEQUENTIALLY
+            foreach (var provider in providers)
+            {
+                if (cancellationToken.IsCancellationRequested) break;
+                if (displayCounter.Count >= maxCacheSize && allViewModels.Count >= maxCacheSize) break;
+
+                try
+                {
+                    if (provider is LocalFolderProvider localProvider)
+                    {
+                        await ProcessLocalProviderSequentiallyAsync(localProvider, allItems, allViewModels, allFilePaths,
+                            uiUpdateQueue, displayCounter, maxCacheSize, batchSize, cancellationToken, flushTimer);
+                    }
+                    else
+                    {
+                        // For cloud providers, get items and add them
+                        var items = await provider.GetPhotoPathsAsync(cancellationToken);
+                        if (cancellationToken.IsCancellationRequested) return;
+
+                        var itemList = items.Take(maxCacheSize - allViewModels.Count).ToList();
+                        var batchViewModels = itemList.Select(item => new PhotoItemViewModel(item) { IsFavorite = _favoritesService.IsFavorite(item.FilePath) }).ToList();
+
+                        allItems.AddRange(itemList);
+                        allViewModels.AddRange(batchViewModels);
+                        allFilePaths.UnionWith(itemList.Select(x => x.FilePath));
+
+                        // Queue ALL items
+                        foreach (var vm in batchViewModels)
+                        {
+                            uiUpdateQueue.Enqueue(vm);
+                            displayCounter.Count++;
+                        }
+
+                        await FlushUIQueueAsync(uiUpdateQueue, cancellationToken);
+                    }
+                }
+                catch
+                {
+                    // Skip provider if it fails
+                }
+            }
+
+            // Final flush
+            await FlushUIQueueAsync(uiUpdateQueue, cancellationToken);
+
+            // Remove duplicates from final cache
+            var uniqueViewModels = allViewModels.GroupBy(vm => vm.Photo.FilePath)
+                .Select(g => g.First())
+                .ToList();
+
+            if (!cancellationToken.IsCancellationRequested && uniqueViewModels.Any())
+            {
+                var entry = new PhotoCacheEntry
+                {
+                    Items = allItems,
+                    ViewModels = uniqueViewModels,
+                    FilePaths = allFilePaths,
+                    CachedAt = DateTime.UtcNow
+                };
+                _photoCache["gallery"] = entry;
+            }
+
+            // Update total count
+            TotalPhotoCount = allViewModels.Count >= maxCacheSize ? -1 : allViewModels.Count;
+        }
+
+        /// <summary>
+        /// Processes a single local folder provider with throttled enumeration and UI updates.
+        /// Stops early once enough items are cached.
+        /// </summary>
+        private async Task ProcessLocalProviderSequentiallyAsync(
+            LocalFolderProvider provider,
+            List<PhotoItem> allItems,
+            List<PhotoItemViewModel> allViewModels,
+            HashSet<string> allFilePaths,
+            Queue<PhotoItemViewModel> uiUpdateQueue,
+            DisplayCounter displayCounter,
+            int maxCacheSize,
+            int batchSize,
+            CancellationToken cancellationToken,
+            System.Diagnostics.Stopwatch flushTimer)
+        {
+            await Task.Run(() =>
+            {
+                var currentBatchPaths = new List<string>(batchSize);
+                var localFlushTimer = System.Diagnostics.Stopwatch.StartNew();
+
+                foreach (var filePath in provider.EnumeratePhotoPathsProgressively())
+                {
+                    if (cancellationToken.IsCancellationRequested) break;
+                    if (allViewModels.Count >= maxCacheSize) break;
+
+                    currentBatchPaths.Add(filePath);
+
+                    if (currentBatchPaths.Count >= batchSize)
+                    {
+                        var batchItems = ProcessBatch(currentBatchPaths, cancellationToken);
+                        if (batchItems.Item3 > 0)
+                        {
+                            lock (allItems) { allItems.AddRange(batchItems.Item1); allViewModels.AddRange(batchItems.Item2); }
+                            lock (allFilePaths) allFilePaths.UnionWith(currentBatchPaths);
+                            lock (uiUpdateQueue)
+                            {
+                                foreach (var vm in batchItems.Item2)
+                                {
+                                    uiUpdateQueue.Enqueue(vm);
+                                    displayCounter.Count++;
+                                }
+                            }
+                        }
+
+                        currentBatchPaths = new List<string>(batchSize);
+
+                        if (localFlushTimer.ElapsedMilliseconds > 300 || uiUpdateQueue.Count >= batchSize)
+                        {
+                            FlushUIQueueFromBackground(uiUpdateQueue, cancellationToken);
+                            localFlushTimer.Restart();
+                        }
+                    }
+                }
+
+                if (currentBatchPaths.Any() && !cancellationToken.IsCancellationRequested)
+                {
+                    var batchItems = ProcessBatch(currentBatchPaths, cancellationToken);
+                    if (batchItems.Item3 > 0)
+                    {
+                        lock (allItems) { allItems.AddRange(batchItems.Item1); allViewModels.AddRange(batchItems.Item2); }
+                        lock (allFilePaths) allFilePaths.UnionWith(currentBatchPaths);
+                        lock (uiUpdateQueue)
+                        {
+                            foreach (var vm in batchItems.Item2)
+                            {
+                                uiUpdateQueue.Enqueue(vm);
+                                displayCounter.Count++;
+                            }
+                        }
+                    }
+                }
+
+                FlushUIQueueFromBackground(uiUpdateQueue, cancellationToken);
+            }, cancellationToken);
+        }
+
+        private void FlushUIQueueFromBackground(Queue<PhotoItemViewModel> queue, CancellationToken cancellationToken)
+        {
+            List<PhotoItemViewModel> batch;
+            lock (queue)
+            {
+                if (queue.Count == 0) return;
+                batch = queue.ToList();
+                queue.Clear();
+            }
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+            {
+                if (!cancellationToken.IsCancellationRequested) _photos.AddRange(batch);
+            });
         }
 
         private async Task LoadSourcePhotosInternalAsync(IPhotoProvider provider, CancellationToken cancellationToken)
         {
-            var photoItems = await provider.GetPhotoPathsAsync();
+            // Use progressive loading for all sources
+            await LoadPhotoItemsProgressivelyFromProviderAsync(() => provider.GetPhotoPathsAsync(cancellationToken), $"source:{_selectedSource?.GetHashCode()}", cancellationToken, refreshCache: true);
+        }
+
+        /// <summary>
+        /// Loads photo items progressively from an async provider.
+        /// Waits for the provider to return, then streams to UI in batches.
+        /// </summary>
+        private async Task LoadPhotoItemsProgressivelyFromProviderAsync(Func<Task<IEnumerable<PhotoItem>>> providerFunc, string cacheKey, CancellationToken cancellationToken, bool refreshCache = false)
+        {
+            // Get all items from provider (may take time for large sources)
+            var photoItems = await providerFunc();
             if (cancellationToken.IsCancellationRequested) return;
-            await LoadPhotoItemsAsync(photoItems, $"source:{_selectedSource?.GetHashCode()}", cancellationToken, refreshCache: true);
+
+            // Then load progressively into UI
+            await LoadPhotoItemsAsync(photoItems, cacheKey, cancellationToken, refreshCache);
         }
 
         private bool TryLoadFromCache(string cacheKey, out PhotoCacheEntry entry)
@@ -1023,14 +1295,27 @@ namespace PhotoViewer.ViewModels
 
             // Build viewmodels and cache them
             var viewModels = new List<PhotoItemViewModel>(itemList.Count);
-            foreach (var item in itemList)
+            const int viewModelBatchSize = 500;
+            
+            for (int i = 0; i < itemList.Count; i += viewModelBatchSize)
             {
-                if (cancellationToken.IsCancellationRequested) break;
-                var vm = new PhotoItemViewModel(item)
+                if (cancellationToken.IsCancellationRequested) return;
+                
+                var batch = itemList.Skip(i).Take(viewModelBatchSize);
+                foreach (var item in batch)
                 {
-                    IsFavorite = _favoritesService.IsFavorite(item.FilePath)
-                };
-                viewModels.Add(vm);
+                    var vm = new PhotoItemViewModel(item)
+                    {
+                        IsFavorite = _favoritesService.IsFavorite(item.FilePath)
+                    };
+                    viewModels.Add(vm);
+                }
+
+                // Yield periodically during viewmodel construction
+                if (i + viewModelBatchSize < itemList.Count)
+                {
+                    await Task.Yield();
+                }
             }
 
             if (cancellationToken.IsCancellationRequested) return;
@@ -1045,37 +1330,26 @@ namespace PhotoViewer.ViewModels
             };
             _photoCache[cacheKey] = entry;
 
-            await Task.Run(async () =>
+            // Add to UI collection in large batches using AddRange
+            const int uiBatchSize = 500;
+            for (int i = 0; i < viewModels.Count; i += uiBatchSize)
             {
-                const int batchSize = 50;
-                var batch = new List<PhotoItemViewModel>(batchSize);
+                if (cancellationToken.IsCancellationRequested) return;
 
-                foreach (var vm in viewModels)
+                var batch = viewModels.Skip(i).Take(uiBatchSize).ToList();
+                
+                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    if (cancellationToken.IsCancellationRequested) break;
-                    batch.Add(vm);
+                    if (cancellationToken.IsCancellationRequested) return;
+                    _photos.AddRange(batch);
+                });
 
-                    if (batch.Count == batchSize)
-                    {
-                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                        {
-                            if (cancellationToken.IsCancellationRequested) return;
-                            foreach (var photoVm in batch)
-                                _photos.Add(photoVm);
-                        });
-                        batch.Clear();
-                    }
-                }
-
-                if (batch.Any() && !cancellationToken.IsCancellationRequested)
+                // Yield between batches to keep UI responsive
+                if (i + uiBatchSize < viewModels.Count)
                 {
-                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                    {
-                        foreach (var photoVm in batch)
-                            _photos.Add(photoVm);
-                    });
+                    await Task.Yield();
                 }
-            }, cancellationToken);
+            }
         }
 
         /// <summary>
@@ -1093,6 +1367,176 @@ namespace PhotoViewer.ViewModels
             }).Where(p => p != null).Select(p => p!);
 
             await LoadPhotoItemsAsync(photoItems, cacheKey, cancellationToken, refreshCache);
+        }
+
+        /// <summary>
+        /// Loads photo items progressively by streaming from a lazy enumeration on a background thread.
+        /// Caps displayed items to MaxDisplayItems to prevent UI lag with large sources.
+        /// Stops enumeration after caching enough items to avoid scanning all 25,000+ files.
+        /// Throttles UI updates to prevent flooding the dispatcher.
+        /// </summary>
+        private async Task LoadPhotoItemsProgressivelyAsync(Func<IEnumerable<string>> pathEnumeratorFactory, string cacheKey, CancellationToken cancellationToken, bool refreshCache = false)
+        {
+            if (_photos.Any())
+            {
+                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _photos.Clear());
+            }
+
+            // Clear cache for this key
+            _photoCache.Remove(cacheKey);
+
+            var allItems = new List<PhotoItem>();
+            var allViewModels = new List<PhotoItemViewModel>();
+            var allFilePaths = new HashSet<string>();
+
+            const int batchSize = 200;
+            int maxCacheSize = int.MaxValue; // No cap - load everything
+            int displayedCount = 0;
+            bool shouldStop = false;
+            var uiUpdateQueue = new Queue<PhotoItemViewModel>();
+
+            await Task.Run(async () =>
+            {
+                var currentBatchPaths = new List<string>(batchSize);
+                var flushTimer = System.Diagnostics.Stopwatch.StartNew();
+
+                foreach (var filePath in pathEnumeratorFactory())
+                {
+                    if (cancellationToken.IsCancellationRequested || shouldStop) break;
+
+                    currentBatchPaths.Add(filePath);
+
+                    if (currentBatchPaths.Count >= batchSize)
+                    {
+                        var batchItems = ProcessBatch(currentBatchPaths, cancellationToken);
+                        if (batchItems.Item3 > 0)
+                        {
+                            lock (allItems)
+                            {
+                                allItems.AddRange(batchItems.Item1);
+                                allViewModels.AddRange(batchItems.Item2);
+                                allFilePaths.UnionWith(currentBatchPaths);
+                            }
+
+                            // Queue ALL items for UI display (no cap)
+                            foreach (var vm in batchItems.Item2)
+                            {
+                                uiUpdateQueue.Enqueue(vm);
+                                displayedCount++;
+                            }
+
+                            // Stop enumerating once we have enough cached
+                            if (allViewModels.Count >= maxCacheSize)
+                            {
+                                shouldStop = true;
+                            }
+                        }
+
+                        currentBatchPaths = new List<string>(batchSize);
+
+                        // Flush queued UI updates every 200ms or when queue gets large
+                        if (flushTimer.ElapsedMilliseconds > 200 || uiUpdateQueue.Count > 50)
+                        {
+                            await FlushUIQueueAsync(uiUpdateQueue, cancellationToken);
+                            flushTimer.Restart();
+                        }
+
+                        // Small delay to yield CPU
+                        await Task.Delay(5, cancellationToken);
+                    }
+                }
+
+                // Process remaining items
+                if (currentBatchPaths.Any() && !cancellationToken.IsCancellationRequested && !shouldStop)
+                {
+                    var batchItems = ProcessBatch(currentBatchPaths, cancellationToken);
+                    if (batchItems.Item3 > 0)
+                    {
+                        lock (allItems)
+                        {
+                            allItems.AddRange(batchItems.Item1);
+                            allViewModels.AddRange(batchItems.Item2);
+                            allFilePaths.UnionWith(currentBatchPaths);
+                        }
+
+                        // Queue ALL remaining items
+                        foreach (var vm in batchItems.Item2)
+                        {
+                            uiUpdateQueue.Enqueue(vm);
+                            displayedCount++;
+                        }
+                    }
+                }
+
+                // Final flush
+                await FlushUIQueueAsync(uiUpdateQueue, cancellationToken);
+            }, cancellationToken);
+
+            // Update total count (may be partial if we stopped early)
+            TotalPhotoCount = allViewModels.Count >= maxCacheSize ? -1 : allViewModels.Count;
+
+            // Update cache with accumulated data
+            if (!cancellationToken.IsCancellationRequested && allViewModels.Count > 0)
+            {
+                var entry = new PhotoCacheEntry
+                {
+                    Items = allItems,
+                    ViewModels = allViewModels,
+                    FilePaths = allFilePaths,
+                    CachedAt = DateTime.UtcNow
+                };
+                _photoCache[cacheKey] = entry;
+            }
+        }
+
+        /// <summary>
+        /// Flushes queued viewmodels to the UI collection in a single batch.
+        /// </summary>
+        private async Task FlushUIQueueAsync(Queue<PhotoItemViewModel> queue, CancellationToken cancellationToken)
+        {
+            if (queue.Count == 0) return;
+
+            var batch = queue.ToList();
+            queue.Clear();
+
+            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                if (cancellationToken.IsCancellationRequested) return;
+                _photos.AddRange(batch);
+            });
+        }
+
+        /// <summary>Processes a batch of file paths into PhotoItems and PhotoItemViewModels. Skips expensive file I/O.</summary>
+        private (List<PhotoItem>, List<PhotoItemViewModel>, int) ProcessBatch(
+            List<string> filePaths,
+            CancellationToken cancellationToken)
+        {
+            var batchItems = new List<PhotoItem>(filePaths.Count);
+            foreach (var fp in filePaths)
+            {
+                if (cancellationToken.IsCancellationRequested) break;
+
+                try
+                {
+                    // Skip File.GetCreationTime and FileInfo.Length - these are expensive I/O ops
+                    // Use filename as display name, 0 for dimensions/size (loaded later if needed)
+                    var item = new PhotoItem(fp, Path.GetFileName(fp), DateTime.MinValue, 0, 0, 0);
+                    batchItems.Add(item);
+                }
+                catch { /* Skip files that fail */ }
+            }
+
+            var batchViewModels = new List<PhotoItemViewModel>(batchItems.Count);
+            foreach (var item in batchItems)
+            {
+                if (cancellationToken.IsCancellationRequested) break;
+
+                // Skip favorites check during initial load - adds 1 I/O op per file
+                var vm = new PhotoItemViewModel(item);
+                batchViewModels.Add(vm);
+            }
+
+            return (batchItems, batchViewModels, batchItems.Count);
         }
 
         private async Task LoadGalleryPhotosAsync(CancellationToken cancellationToken)
@@ -1121,16 +1565,8 @@ namespace PhotoViewer.ViewModels
                 return;
             }
 
-            var galleryProvider = new GalleryProvider(allProviders);
-            var photoItems = await galleryProvider.GetPhotoPathsAsync();
-            if (cancellationToken.IsCancellationRequested) return;
-
-            // Update Gallery count
-            var galleryItem = CollectionSources.FirstOrDefault(s => s.DisplayName == "Gallery");
-            if (galleryItem != null)
-                galleryItem.PhotoCount = photoItems.Count();
-
-            await LoadPhotoItemsAsync(photoItems, "gallery", cancellationToken);
+            // Use progressive loading - don't wait for all providers to finish
+            await LoadGalleryPhotosProgressivelyAsync(allProviders, cancellationToken);
         }
 
         private void ExecuteOpenSettingsCommand(object? parameter)
@@ -1149,6 +1585,11 @@ namespace PhotoViewer.ViewModels
         protected virtual void OnPropertyChanged(string propertyName)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        private class DisplayCounter
+        {
+            public int Count;
         }
     }
 }

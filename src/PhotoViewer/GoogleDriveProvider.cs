@@ -7,6 +7,7 @@ using PhotoViewer.Models;
 using System.Threading.Tasks;
 using GFile = Google.Apis.Drive.v3.Data.File;
 using System;
+using System.Threading;
 
 namespace PhotoViewer.Services
 {
@@ -29,20 +30,30 @@ namespace PhotoViewer.Services
         /// <summary>
         /// Fetches a list of all image items from the user's Google Drive.
         /// </summary>
-        public async Task<IEnumerable<PhotoItem>> GetPhotoPathsAsync()
+        public Task<IEnumerable<PhotoItem>> GetPhotoPathsAsync()
+        {
+            return GetPhotoPathsAsync(CancellationToken.None);
+        }
+
+        /// <summary>
+        /// Fetches a list of all image items from the user's Google Drive.
+        /// </summary>
+        public async Task<IEnumerable<PhotoItem>> GetPhotoPathsAsync(CancellationToken cancellationToken)
         {
             var photoItems = new List<PhotoItem>();
             string? pageToken = null;
 
             do
             {
+                if (cancellationToken.IsCancellationRequested) break;
+
                 var request = _driveService.Files.List();
                 request.Q = "mimeType contains 'image/'"; // Query to find all image types
                 request.Spaces = "drive";
                 request.Fields = "nextPageToken, files(id, name, createdTime, size, webContentLink)";
                 request.PageToken = pageToken;
 
-                var result = await request.ExecuteAsync();
+                var result = await request.ExecuteAsync(cancellationToken);
                 if (result.Files != null)
                 {
                     photoItems.AddRange(result.Files.Select(f => new PhotoItem(f.WebContentLink, f.Name, f.CreatedTimeDateTimeOffset?.DateTime ?? DateTime.MinValue, f.Size ?? 0)));

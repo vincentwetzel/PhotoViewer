@@ -44,12 +44,7 @@ namespace PhotoViewer.Models
         }
 
         public ObservableCollection<FolderNode> SubFolders { get; } = new();
-        public int PhotoCount { get; private set; }
-
-        /// <summary>
-        /// Total photo count including all subfolders recursively.
-        /// </summary>
-        public int TotalPhotoCount => GetAllPhotoPaths().Count();
+        public int PhotoCount { get; set; }
 
         public FolderNode(string fullPath, FolderNode? parent = null)
         {
@@ -58,12 +53,28 @@ namespace PhotoViewer.Models
             Parent = parent;
             if (parent != null)
                 RootSource = parent.RootSource;
-            PhotoCount = CountPhotosInFolder();
-            LoadSubFolderShallow();
+            PhotoCount = 0;
+            HasSubFolders = CheckHasSubFolders();
+        }
+
+        /// <summary>
+        /// Quick check if folder has subdirectories — stops at first match (doesn't enumerate all).
+        /// </summary>
+        private bool CheckHasSubFolders()
+        {
+            try
+            {
+                return Directory.EnumerateDirectories(FullName).Any();
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         /// <summary>
         /// Loads immediate subfolders (shallow) to enable expand/collapse.
+        /// Only called when user expands a node — not during construction.
         /// </summary>
         private void LoadSubFolderShallow()
         {
@@ -84,12 +95,13 @@ namespace PhotoViewer.Models
 
         /// <summary>
         /// Public wrapper to reload subfolders. Used by FolderSourceViewModel after RootSource is set.
+        /// Photo count is calculated asynchronously.
         /// </summary>
         public void LoadSubFolders()
         {
             SubFolders.Clear();
             LoadSubFolderShallow();
-            PhotoCount = CountPhotosInFolder();
+            // PhotoCount is not set here - it's calculated asynchronously by the parent
         }
 
         /// <summary>
@@ -123,7 +135,7 @@ namespace PhotoViewer.Models
             }
 
             HasSubFolders = SubFolders.Count > 0;
-            PhotoCount = CountPhotosInFolder();
+            // PhotoCount not updated here - async calculation only
         }
 
         /// <summary>
@@ -155,24 +167,38 @@ namespace PhotoViewer.Models
 
         /// <summary>
         /// Recursively finds all photo file paths in this folder and all subfolders.
+        /// Uses yield return for lazy enumeration to avoid loading all paths into memory at once.
         /// </summary>
         public IEnumerable<string> GetAllPhotoPaths()
         {
-            var photos = new List<string>();
-            try
+            // Enumerate photos in this folder
+            var files = GetPhotoFilesInCurrentFolder();
+            foreach (var file in files)
             {
-                var files = Directory.EnumerateFiles(FullName, "*.*")
-                    .Where(f => ImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()));
-                photos.AddRange(files);
+                yield return file;
             }
-            catch { }
 
+            // Recurse into subfolders
             foreach (var sub in SubFolders)
             {
-                photos.AddRange(sub.GetAllPhotoPaths());
+                foreach (var path in sub.GetAllPhotoPaths())
+                {
+                    yield return path;
+                }
             }
+        }
 
-            return photos;
+        private IEnumerable<string> GetPhotoFilesInCurrentFolder()
+        {
+            try
+            {
+                return Directory.EnumerateFiles(FullName, "*.*")
+                    .Where(f => ImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()));
+            }
+            catch
+            {
+                return Enumerable.Empty<string>();
+            }
         }
 
         private int CountPhotosInFolder()

@@ -2,6 +2,7 @@ using PhotoViewer.Models;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace PhotoViewer.Services
@@ -19,6 +20,11 @@ namespace PhotoViewer.Services
 
         public Task<IEnumerable<PhotoItem>> GetPhotoPathsAsync()
         {
+            return GetPhotoPathsAsync(CancellationToken.None);
+        }
+
+        public Task<IEnumerable<PhotoItem>> GetPhotoPathsAsync(CancellationToken cancellationToken)
+        {
             return Task.Run(() =>
             {
                 return _historyService.GetHistory()
@@ -29,7 +35,7 @@ namespace PhotoViewer.Services
                         fileInfo.Name,
                         fileInfo.CreationTime,
                         fileInfo.Length));
-            });
+            }, cancellationToken);
         }
     }
 }

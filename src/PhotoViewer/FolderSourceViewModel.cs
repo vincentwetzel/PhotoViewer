@@ -22,8 +22,14 @@ namespace PhotoViewer.ViewModels
 
         /// <summary>
         /// Total photo count across all folders and subfolders.
+        /// Cached - updated asynchronously to avoid blocking UI.
         /// </summary>
-        public int PhotoCount => Root.TotalPhotoCount;
+        private int _photoCount;
+        public int PhotoCount
+        {
+            get => _photoCount;
+            set { _photoCount = value; OnPropertyChanged(); }
+        }
 
         /// <summary>
         /// Refreshes the folder tree recursively, picking up any folders added/deleted on disk.
@@ -54,9 +60,39 @@ namespace PhotoViewer.ViewModels
             // Re-load subfolders now that RootSource is set, so children inherit it
             Root.LoadSubFolders();
             DisplayName = System.IO.Path.GetFileName(provider.SourceName);
+            PhotoCount = 0; // Will be calculated asynchronously
 
             // Start watching for file system changes
             StartFileSystemWatcher();
+        }
+
+        /// <summary>
+        /// Calculates the total photo count asynchronously and updates the PhotoCount property.
+        /// This avoids blocking the UI thread during construction.
+        /// </summary>
+        public async Task CalculatePhotoCountAsync()
+        {
+            int count = await Task.Run(() => CountPhotosInTree(Root));
+            PhotoCount = count;
+        }
+
+        private static int CountPhotosInTree(FolderNode node)
+        {
+            int count = 0;
+            try
+            {
+                count = Directory.EnumerateFiles(node.FullName, "*.*")
+                    .Count(f => new[] { ".jpg", ".jpeg", ".png", ".bmp" }
+                        .Contains(System.IO.Path.GetExtension(f).ToLowerInvariant()));
+            }
+            catch { }
+
+            foreach (var sub in node.SubFolders)
+            {
+                count += CountPhotosInTree(sub);
+            }
+
+            return count;
         }
 
         private FileSystemWatcher? _watcher;

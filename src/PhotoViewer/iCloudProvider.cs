@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace PhotoViewer.Services
@@ -14,6 +15,11 @@ namespace PhotoViewer.Services
         public string SourceName => "iCloud Photos";
 
         public Task<IEnumerable<PhotoItem>> GetPhotoPathsAsync()
+        {
+            return GetPhotoPathsAsync(CancellationToken.None);
+        }
+
+        public Task<IEnumerable<PhotoItem>> GetPhotoPathsAsync(CancellationToken cancellationToken)
         {
             return Task.Run(() => {
                 var iCloudPhotosPath = GetiCloudPhotosPath();
@@ -40,7 +46,7 @@ namespace PhotoViewer.Services
                         fileInfo.Name,
                         fileInfo.CreationTime,
                         fileInfo.Length));
-            });
+            }, cancellationToken);
         }
 
         private string GetiCloudPhotosPath()

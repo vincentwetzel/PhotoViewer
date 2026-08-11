@@ -5,6 +5,7 @@ using Microsoft.Kiota.Abstractions;
 using PhotoViewer.Models;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace PhotoViewer.Services
@@ -24,7 +25,15 @@ namespace PhotoViewer.Services
         /// <summary>
         /// Fetches a list of image items from the user's special 'Pictures' folder in OneDrive.
         /// </summary>
-        public async Task<IEnumerable<PhotoItem>> GetPhotoPathsAsync()
+        public Task<IEnumerable<PhotoItem>> GetPhotoPathsAsync()
+        {
+            return GetPhotoPathsAsync(CancellationToken.None);
+        }
+
+        /// <summary>
+        /// Fetches a list of image items from the user's special 'Pictures' folder in OneDrive.
+        /// </summary>
+        public async Task<IEnumerable<PhotoItem>> GetPhotoPathsAsync(CancellationToken cancellationToken)
         {
             var photos = new List<PhotoItem>();
 
@@ -32,10 +41,10 @@ namespace PhotoViewer.Services
             // We build the request URL manually as a workaround.
             var requestInfo = _graphClient.Me.Drive.ToGetRequestInformation();
             requestInfo.UrlTemplate = requestInfo.UrlTemplate?.Replace("{?%24select}", "/special/pictures/children{?%24select}");
-            
+
             requestInfo.QueryParameters.Add("%24select", new[] { "id", "name", "webUrl", "@microsoft.graph.downloadUrl", "image", "createdDateTime", "size" });
 
-            var itemsPage = await _graphClient.RequestAdapter.SendAsync(requestInfo, DriveItemCollectionResponse.CreateFromDiscriminatorValue);
+            var itemsPage = await _graphClient.RequestAdapter.SendAsync(requestInfo, DriveItemCollectionResponse.CreateFromDiscriminatorValue, cancellationToken: cancellationToken);
 
             if (itemsPage?.Value == null)
             {
