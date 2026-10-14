@@ -10,9 +10,13 @@
         xmlns:controls="clr-namespace:PhotoViewer.Controls"
         xmlns:converters="clr-namespace:PhotoViewer.Converters"
         mc:Ignorable="d"
-        Title="PhotoViewer Gallery" Height="768" Width="1024"
+        Title="PhotoViewer Gallery" AutomationProperties.Name="PhotoViewer gallery" Height="768" Width="1024" MinWidth="760" MinHeight="480"
         WindowStartupLocation="CenterScreen"
         Loaded="Window_Loaded"
+        PreviewKeyDown="MainWindow_PreviewKeyDown"
+        AllowDrop="True"
+        DragOver="MainWindow_DragOver"
+        Drop="MainWindow_Drop"
         Background="{DynamicResource WindowBackground}"
         WindowStyle="None"
         ResizeMode="CanResize"
@@ -85,8 +89,6 @@
 
         <!-- Placeholder Icons -->
         <Path x:Key="IconFolder" x:Shared="False" Data="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z" Fill="{DynamicResource TextForeground}" />
-        <Path x:Key="IconOneDrive" x:Shared="False" Data="M5.5,6.5A2,2 0 0,1 7.5,4.5A2,2 0 0,1 9.5,6.5A2,2 0 0,1 7.5,8.5A2,2 0 0,1 5.5,6.5M10.5,10.5A2,2 0 0,1 12.5,8.5A2,2 0 0,1 14.5,10.5A2,2 0 0,1 12.5,12.5A2,2 0 0,1 10.5,10.5M2,19.5V10.5A2,2 0 0,1 4,8.5H5.5V10.5H4V19.5H12.5V18H14.5V19.5A2,2 0 0,1 12.5,21.5H4A2,2 0 0,1 2,19.5M19,13A4,4 0 0,0 15,17H15.67A3.5,3.5 0 0,0 19,20.5A3.5,3.5 0 0,0 22.5,17A3.5,3.5 0 0,0 19,13.5C18.9,13.5 18.79,13.5 18.69,13.55A4,4 0 0,0 19,13Z" Fill="{DynamicResource TextForeground}" />
-        <Path x:Key="IconGoogleDrive" x:Shared="False" Data="M9.2,3.45L15.8,14.29L12.75,19.5L2.5,19.5L5.8,13.79L9.2,3.45M10.5,0L4,11.25L1,19.5H14L18,12.75L10.5,0Z M15.17,15L18.5,9L23,16.5L19.67,22.5H13.42L15.17,15Z" Fill="{DynamicResource TextForeground}" />
         <Path x:Key="IconRecent" x:Shared="False" Data="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M16.2,16.2L11,13V7H12.5V12.2L17,14.9L16.2,16.2Z" Fill="{DynamicResource TextForeground}" />
         <Path x:Key="IconGallery" x:Shared="False" Data="M4,4H10V10H4V4M14,4H20V10H14V4M4,14H10V20H4V14M14,14H20V20H14V14Z" Fill="{DynamicResource TextForeground}" />
         <Path x:Key="IconHeart" x:Shared="False" Data="M12,21.35l-1.45-1.32C5.4,15.36 2,12.28 2,8.5 2,5.42 4.42,3 7.5,3c1.74,0 3.41,0.81 4.5,2.09C13.09,3.81 14.76,3 16.5,3 19.58,3 22,5.42 22,8.5c0,3.78 -3.4,6.86 -8.55,11.54L12,21.35z" Fill="{DynamicResource TextForeground}" Stretch="Uniform" Width="20" Height="20" />
@@ -127,24 +129,6 @@
         <DataTemplate x:Key="FolderSourceTemplate">
             <StackPanel Orientation="Horizontal">
                 <ContentPresenter Content="{StaticResource IconFolder}" Width="20" Height="20" Margin="0,0,10,0" />
-                <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="8,0,0,0"
-                           FontSize="12" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
-            </StackPanel>
-        </DataTemplate>
-
-        <DataTemplate x:Key="OneDriveSourceTemplate" DataType="{x:Type viewModels:OneDriveSourceViewModel}">
-            <StackPanel Orientation="Horizontal">
-                <ContentPresenter Content="{StaticResource IconOneDrive}" Width="20" Height="20" Margin="0,0,10,0" />
-                <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="8,0,0,0"
-                           FontSize="12" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
-            </StackPanel>
-        </DataTemplate>
-
-        <DataTemplate x:Key="GoogleDriveSourceTemplate" DataType="{x:Type viewModels:GoogleDriveSourceViewModel}">
-            <StackPanel Orientation="Horizontal">
-                <ContentPresenter Content="{StaticResource IconGoogleDrive}" Width="20" Height="20" Margin="0,0,10,0" />
                 <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" />
                 <TextBlock Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="8,0,0,0"
                            FontSize="12" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
@@ -193,8 +177,6 @@
 
         <selectors:SourceTemplateSelector x:Key="SourceSelector"
                                           FolderTemplate="{StaticResource FolderSourceTemplate}"
-                                          OneDriveTemplate="{StaticResource OneDriveSourceTemplate}"
-                                          GoogleDriveTemplate="{StaticResource GoogleDriveSourceTemplate}"
                                           GalleryTemplate="{StaticResource GallerySourceTemplate}"
                                           DefaultTemplate="{StaticResource GenericSourceTemplate}" />
 
@@ -209,20 +191,46 @@
         <Border Grid.Row="0" Background="{DynamicResource ControlBackground}" Height="32">
             <Grid>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 
                 <!-- Window Title -->
-                <TextBlock Grid.Column="0" Text="PhotoViewer Gallery" 
-                           VerticalAlignment="Center" Margin="10,0,0,0"
-                           FontSize="13" Foreground="{DynamicResource TextForeground}" />
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="☰" Command="{Binding ToggleNavigationCommand}" Width="32" Height="28"
+                            MinHeight="0" Padding="0" Margin="8,0,4,0" ToolTip="Toggle navigation"
+                            AutomationProperties.Name="Toggle navigation pane" />
+                    <TextBlock Text="Photos" FontWeight="SemiBold"
+                               VerticalAlignment="Center" Margin="4,0,18,0"
+                               FontSize="14" Foreground="{DynamicResource TextForeground}" />
+                </StackPanel>
+
+                <Grid Grid.Column="1" MaxWidth="460" HorizontalAlignment="Center" Margin="12,3">
+                    <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="{Binding SearchScope}" Padding="28,4,34,4"
+                             VerticalContentAlignment="Center" AutomationProperties.Name="Search photos" />
+                    <TextBlock Text="⌕" FontSize="18" Margin="9,0,0,0"
+                               VerticalAlignment="Center" Foreground="{DynamicResource SubtleTextForeground}"
+                               IsHitTestVisible="False" />
+                    <Button Command="{Binding ClearSearchCommand}" Content="×"
+                            Width="28" Height="26" MinHeight="0" Padding="0"
+                            HorizontalAlignment="Right" Margin="0,0,4,0"
+                            ToolTip="Clear search" AutomationProperties.Name="Clear search" Background="Transparent" BorderThickness="0"
+                            Visibility="{Binding HasSearchText, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                </Grid>
+
+                <Button Grid.Column="2" Content="Import" Command="{Binding ImportCommand}"
+                        Margin="4,2,8,2" Padding="12,3" ToolTip="Import photos"
+                        AutomationProperties.Name="Import photos and videos" />
                 
                 <!-- Window Controls -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                <StackPanel Grid.Column="3" Orientation="Horizontal" shell:WindowChrome.IsHitTestVisibleInChrome="True">
                     <!-- Settings Button -->
                     <Button Width="46" Height="32" Background="Transparent" BorderThickness="0" Cursor="Hand"
-                            Command="{Binding OpenSettingsCommand}" ToolTip="Settings">
+                            Command="{Binding OpenSettingsCommand}" ToolTip="Settings"
+                            AutomationProperties.Name="Open settings">
                         <Viewbox Width="18" Height="18" Margin="2">
                             <ContentPresenter Content="{StaticResource IconSettings}" />
                         </Viewbox>
@@ -240,7 +248,7 @@
 
                     <!-- Minimize Button -->
                     <Button Width="46" Height="32" Background="Transparent" BorderThickness="0" Cursor="Hand"
-                            Click="MinimizeButton_Click" ToolTip="Minimize">
+                            Click="MinimizeButton_Click" ToolTip="Minimize" AutomationProperties.Name="Minimize window">
                         <Path Data="M6,8 L18,8" Stroke="{DynamicResource TextForeground}" StrokeThickness="1" />
                         <Button.Style>
                             <Style TargetType="Button">
@@ -255,7 +263,7 @@
 
                     <!-- Maximize/Restore Button -->
                     <Button x:Name="MaximizeButton" Width="46" Height="32" Background="Transparent" BorderThickness="0" Cursor="Hand"
-                            Click="MaximizeButton_Click" ToolTip="Maximize">
+                            Click="MaximizeButton_Click" ToolTip="Maximize" AutomationProperties.Name="Maximize or restore window">
                         <Path Data="M6,6 L18,6 L18,18 L6,18 Z" Stroke="{DynamicResource TextForeground}" StrokeThickness="1" />
                         <Button.Style>
                             <Style TargetType="Button">
@@ -270,7 +278,7 @@
 
                     <!-- Close Button -->
                     <Button Width="46" Height="32" Background="Transparent" BorderThickness="0" Cursor="Hand"
-                            Click="CloseButton_Click" ToolTip="Close">
+                            Click="CloseButton_Click" ToolTip="Close" AutomationProperties.Name="Close window">
                         <Path Data="M8,8 L16,16 M16,8 L8,16" Stroke="{DynamicResource TextForeground}" StrokeThickness="1" />
                         <Button.Style>
                             <Style TargetType="Button">
@@ -306,28 +314,31 @@
                 </MenuItem>
                 <MenuItem Header="Sources" Foreground="{DynamicResource TextForeground}">
                     <MenuItem Header="Add Local Folder..." Command="{Binding AddLocalFolderCommand}" />
-                    <MenuItem Header="Add OneDrive Account..." Command="{Binding AddOneDriveAccountCommand}" />
-                    <MenuItem Header="Add Google Drive Account..." Command="{Binding AddGoogleDriveAccountCommand}" />
-                    <MenuItem Header="Sync iCloud Photos..." IsEnabled="False" />
                     <MenuItem Header="Import from Phone..." IsEnabled="False" />
                 </MenuItem>
             </Menu>
 
             <Grid Grid.Row="1" Background="{DynamicResource ControlBackground}">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="280" MinWidth="200" MaxWidth="500" /> <!-- Source Navigation Pane -->
+                <ColumnDefinition Width="{Binding NavigationPaneWidth}" MinWidth="72" MaxWidth="500" /> <!-- Source Navigation Pane -->
                 <ColumnDefinition Width="Auto" /> <!-- GridSplitter -->
                 <ColumnDefinition Width="*" />    <!-- Photo Grid -->
             </Grid.ColumnDefinitions>
 
             <!-- Source Navigation Pane -->
             <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          ClipToBounds="True"
                           Background="{DynamicResource ControlBackground}">
                 <StackPanel>
+                    <DockPanel Margin="16,14,12,6">
+                        <TextBlock Text="Collections" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource SubtleTextForeground}" />
+                    </DockPanel>
                     <!-- Collections: Gallery, Favorites, Recently Viewed -->
                     <ListBox x:Name="CollectionListBox"
                              ItemsSource="{Binding CollectionSources}"
                              SelectedItem="{Binding SelectedSource}"
+                             AutomationProperties.Name="Collections"
                              BorderThickness="0" Background="Transparent"
                              ItemTemplateSelector="{StaticResource SourceSelector}"
                              Foreground="{DynamicResource TextForeground}">
@@ -336,6 +347,15 @@
                                 <Setter Property="Padding" Value="16,6,12,6" />
                                 <Setter Property="Foreground" Value="{DynamicResource TextForeground}" />
                                 <Setter Property="BorderThickness" Value="0" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource ListItemHover}" />
+                                    </Trigger>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource SelectedBackground}" />
+                                    </Trigger>
+                                </Style.Triggers>
                             </Style>
                         </ListBox.ItemContainerStyle>
                     </ListBox>
@@ -343,14 +363,24 @@
                     <!-- Divider Line -->
                     <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="16,6,16,6" />
 
-                    <!-- User Sources: Folder trees + Cloud accounts -->
+                    <DockPanel Margin="16,4,12,6">
+                        <TextBlock Text="Sources" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource SubtleTextForeground}" />
+                        <Button Content="Add folder" Command="{Binding AddLocalFolderCommand}"
+                                DockPanel.Dock="Right" Padding="8,2" MinHeight="26"
+                                ToolTip="Add a local photo folder" AutomationProperties.Name="Add local photo folder" />
+                    </DockPanel>
+
+                    <!-- User Sources: local folder trees -->
                     <TreeView x:Name="SourceTreeView"
                               ItemsSource="{Binding UserSources}"
+                              AutomationProperties.Name="Photo sources"
                               BorderThickness="0" Background="Transparent"
                               Foreground="{DynamicResource TextForeground}"
-                              SelectedItemChanged="SourceTreeView_SelectedItemChanged">
+                              SelectedItemChanged="SourceTreeView_SelectedItemChanged"
+                              PreviewMouseRightButtonDown="SourceTreeView_PreviewMouseRightButtonDown">
                         <TreeView.Resources>
-                            <!-- Template for non-folder sources (OneDrive, Google Drive) -->
+                            <!-- Template for local collection sources -->
                             <HierarchicalDataTemplate DataType="{x:Type viewModels:SourceItemViewModel}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -362,15 +392,12 @@
                                             <ContentPresenter.Style>
                                                 <Style TargetType="ContentPresenter">
                                                     <Setter Property="Content" Value="{StaticResource IconFolder}" />
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Provider}" Value="{x:Null}">
-                                                            <Setter Property="Content" Value="{StaticResource IconFolder}" />
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
                                                 </Style>
                                             </ContentPresenter.Style>
                                         </ContentPresenter>
                                         <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" FontSize="15" />
+                                        <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" Margin="8,0,0,0"
+                                                   FontSize="12" Foreground="{DynamicResource SubtleTextForeground}" />
                                     </StackPanel>
                                     <TextBlock Grid.Column="1" Text="{Binding PhotoCount}" VerticalAlignment="Center" Margin="10,0,0,0"
                                                FontSize="13" Foreground="{DynamicResource TextForeground}" Opacity="0.5" />
@@ -459,6 +486,7 @@
 
                                 <HierarchicalDataTemplate.ItemContainerStyle>
                                     <Style TargetType="TreeViewItem">
+                                        <Setter Property="AutomationProperties.Name" Value="{Binding DisplayName}" />
                                         <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
                                         <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
                                         <Setter Property="Padding" Value="0" />
@@ -508,6 +536,7 @@
                         </TreeView.Resources>
                         <TreeView.ItemContainerStyle>
                             <Style TargetType="TreeViewItem">
+                                <Setter Property="AutomationProperties.Name" Value="{Binding DisplayName}" />
                                 <EventSetter Event="PreviewMouseLeftButtonDown" Handler="TreeViewItem_PreviewMouseLeftButtonDown" />
                                 <Setter Property="Padding" Value="0" />
                                 <Setter Property="BorderThickness" Value="0" />
@@ -554,7 +583,9 @@
                         </TreeView.ItemContainerStyle>
                         <TreeView.ContextMenu>
                             <ContextMenu>
-                                <MenuItem Header="Remove" Click="RemoveMenuItem_Click" />
+                                <MenuItem Header="Source details" Click="SourceDetailsMenuItem_Click" />
+                                <Separator />
+                                <MenuItem Header="Remove source" Click="RemoveMenuItem_Click" />
                             </ContextMenu>
                         </TreeView.ContextMenu>
                     </TreeView>
@@ -566,8 +597,53 @@
             <!-- Photo Grid -->
             <DockPanel Grid.Column="2">
                 <!-- Toolbar for Sorting and Filtering -->
-                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5" Background="{DynamicResource ControlBackground}">
-                    <TextBlock Text="Sort by:" VerticalAlignment="Center" Margin="5,0,5,0" Foreground="{DynamicResource TextForeground}"/>
+                <DockPanel DockPanel.Dock="Top" Margin="20,16,20,12" LastChildFill="False">
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                        <TextBlock Text="{Binding GalleryTitle}" FontSize="24" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextForeground}" />
+                        <StackPanel Orientation="Vertical" Margin="10,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding PhotoSummary}" FontSize="13"
+                                       Foreground="{DynamicResource SubtleTextForeground}" />
+                            <TextBlock Text="{Binding DateRangeSummary}" FontSize="12"
+                                       Foreground="{DynamicResource SubtleTextForeground}" />
+                        </StackPanel>
+                        <TextBlock Text="  ·  " FontSize="20" Margin="4,2,0,0"
+                                   Foreground="{DynamicResource SubtleTextForeground}" />
+                        <TextBlock Text="{Binding TotalPhotoCount, StringFormat={}{0} items}" FontSize="13"
+                                   VerticalAlignment="Bottom" Margin="0,0,0,3"
+                                   Foreground="{DynamicResource SubtleTextForeground}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                    <Button Content="Select" Command="{Binding EnterSelectionModeCommand}"
+                            ToolTip="Select photos" AutomationProperties.Name="Enter photo selection mode" Margin="0,0,8,0" />
+                    <TextBlock Text="{Binding SelectedPhotoCount, StringFormat={}{0} selected}" VerticalAlignment="Center"
+                               Margin="0,0,8,0" Foreground="{DynamicResource SubtleTextForeground}"
+                               Visibility="{Binding IsSelectionMode, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    <Button Content="Select all" Command="{Binding SelectAllCommand}" Margin="0,0,4,0"
+                            Visibility="{Binding IsSelectionMode, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    <Button Content="Select none" Command="{Binding SelectNoneCommand}" Margin="0,0,4,0"
+                            Visibility="{Binding IsSelectionMode, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    <Button Content="Cancel" Command="{Binding CancelSelectionCommand}" Margin="0,0,8,0"
+                            Visibility="{Binding IsSelectionMode, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    <Button Content="Favorite" Command="{Binding ToggleSelectedFavoritesCommand}" Margin="0,0,8,0"
+                            Visibility="{Binding IsSelectionMode, Converter={StaticResource BooleanToVisibilityConverter}}"
+                            ToolTip="Favorite or unfavorite selected photos" />
+                    <Button Content="Delete" Command="{Binding DeleteSelectedCommand}" Margin="0,0,4,0"
+                            Visibility="{Binding IsSelectionMode, Converter={StaticResource BooleanToVisibilityConverter}}"
+                            ToolTip="Move selected local files to the Recycle Bin" />
+                    <Button Content="Copy" Command="{Binding CopySelectedCommand}" Margin="0,0,4,0"
+                            Visibility="{Binding IsSelectionMode, Converter={StaticResource BooleanToVisibilityConverter}}"
+                            ToolTip="Copy selected local files to the clipboard" />
+                    <Button Content="Open with" Command="{Binding OpenWithSelectedCommand}" Margin="0,0,4,0"
+                            Visibility="{Binding IsSelectionMode, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    <Button Content="Move" Command="{Binding MoveSelectedCommand}" Margin="0,0,8,0"
+                            Visibility="{Binding IsSelectionMode, Converter={StaticResource BooleanToVisibilityConverter}}"
+                            ToolTip="Move selected local files" />
+                    <TextBlock Text="Media:" VerticalAlignment="Center" Margin="0,0,5,0"
+                               Foreground="{DynamicResource TextForeground}" />
+                    <ComboBox ItemsSource="{Binding MediaTypeOptions}" SelectedItem="{Binding SelectedMediaType}"
+                              Width="100" Style="{StaticResource ThemeComboBoxStyle}" ToolTip="Filter by media type" />
+                    <TextBlock Text="Sort by:" VerticalAlignment="Center" Margin="12,0,5,0" Foreground="{DynamicResource TextForeground}"/>
                     <ComboBox x:Name="SortByComboBox"
                         ItemsSource="{Binding SortOptions}"
                         SelectedItem="{Binding SelectedSortOption}"
@@ -583,14 +659,23 @@
                         VerticalContentAlignment="Center"
                         Style="{StaticResource ThemeComboBoxStyle}"/>
 
-                    <TextBlock Text="Search:" VerticalAlignment="Center" Margin="15,0,5,0" Foreground="{DynamicResource TextForeground}"/>
-                    <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Width="200" VerticalContentAlignment="Center"
-                             Background="{DynamicResource WindowBackground}" Foreground="{DynamicResource TextForeground}"
-                             BorderBrush="{DynamicResource BorderBrush}" />
-                </StackPanel>
+                    <TextBlock Text="Size:" VerticalAlignment="Center" Margin="12,0,5,0" Foreground="{DynamicResource TextForeground}"/>
+                    <ComboBox ItemsSource="{Binding ThumbnailSizeOptions}"
+                              SelectedItem="{Binding ThumbnailRowHeight}"
+                              Width="72" Style="{StaticResource ThemeComboBoxStyle}"
+                              ToolTip="Thumbnail density" />
+
+                    </StackPanel>
+                    <TextBlock Text="{Binding LoadWarningMessage}" DockPanel.Dock="Bottom"
+                               Margin="0,8,0,0" TextWrapping="Wrap"
+                               Foreground="{DynamicResource SubtleTextForeground}"
+                               Visibility="{Binding HasLoadWarning, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                </DockPanel>
 
                 <Grid>
-                    <ListBox ItemsSource="{Binding PhotosView}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                    <ListBox x:Name="PhotoListBox" ItemsSource="{Binding PhotosView}" SelectionMode="Extended"
+                             AutomationProperties.Name="Photo gallery"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                              SelectionChanged="PhotoListBox_SelectionChanged"
                              Background="{DynamicResource ControlBackground}"
                              Margin="24,0,24,0"
@@ -600,22 +685,62 @@
                              ScrollViewer.CanContentScroll="True">
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem">
+                                <Setter Property="AutomationProperties.Name" Value="{Binding Photo.FileName}" />
                                 <Setter Property="Padding" Value="0" />
                                 <Setter Property="Margin" Value="0" />
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                                 <Setter Property="VerticalContentAlignment" Value="Stretch" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource SelectedBackground}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
                             </Style>
                         </ListBox.ItemContainerStyle>
                         <ListBox.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <controls:JustifiedWrapPanel TargetRowHeight="180" ItemSpacing="5" />
+                                <controls:JustifiedWrapPanel TargetRowHeight="{Binding DataContext.ThumbnailRowHeight, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                              ItemSpacing="8" />
                             </ItemsPanelTemplate>
                         </ListBox.ItemsPanel>
                         <ListBox.ItemTemplate>
                             <DataTemplate DataType="{x:Type viewModels:PhotoItemViewModel}">
-                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" ToolTip="{Binding Photo.FilePath}">
-                                    <Grid Cursor="Hand">
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8"
+                                        ClipToBounds="True" ToolTip="{Binding Photo.FilePath}">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                        </Grid.RowDefinitions>
+                                        <Border Grid.Row="0" Background="{DynamicResource WindowBackground}" Padding="8,4"
+                                                Visibility="{Binding HasDateGroupHeader, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <TextBlock Text="{Binding DateGroupLabel}" FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextForeground}" />
+                                        </Border>
+                                    <Grid Grid.Row="1" Cursor="Hand">
                                         <Image Source="{Binding Photo.FilePath, Converter={StaticResource ImagePathToThumbnailConverter}, IsAsync=True}" Stretch="UniformToFill" />
+
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                                                    Margin="8" IsHitTestVisible="False">
+                                            <Border Background="{DynamicResource ControlBackground}" CornerRadius="4" Padding="6,2"
+                                                    Visibility="{Binding Photo.IsVideo, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <TextBlock Text="VIDEO" FontSize="10" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextForeground}" />
+                                            </Border>
+                                            <Border Background="{DynamicResource ControlBackground}" CornerRadius="4" Padding="6,2" Margin="4,0,0,0"
+                                                    Visibility="{Binding IsDuplicate, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <TextBlock Text="DUPLICATE" FontSize="10" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextForeground}" />
+                                            </Border>
+                                        </StackPanel>
+
+                                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                  Checked="PhotoSelectionCheckBox_Changed"
+                                                  Unchecked="PhotoSelectionCheckBox_Changed"
+                                                  HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                  Margin="10" Width="24" Height="24"
+                                                  ToolTip="Select photo" AutomationProperties.Name="Select photo"
+                                                  Visibility="{Binding DataContext.IsSelectionMode, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
                                         <!-- Favorite Button -->
                                         <Button Command="{Binding DataContext.ToggleFavoriteCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
@@ -625,7 +750,8 @@
                                                 Background="{DynamicResource ControlBackground}" BorderThickness="0"
                                                 FontFamily="Segoe UI Symbol" FontSize="20"
                                                 Padding="0"
-                                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                                ToolTip="Favorite or unfavorite photo" AutomationProperties.Name="Toggle photo favorite">
                                             <Button.Style>
                                                 <Style TargetType="Button">
                                                     <Setter Property="Content" Value="&#9825;" />
@@ -639,6 +765,7 @@
                                                 </Style>
                                             </Button.Style>
                                         </Button>
+                                    </Grid>
                                     </Grid>
                                 </Border>
                             </DataTemplate>
@@ -659,6 +786,44 @@
                                        Foreground="{DynamicResource TextForeground}"/>
                         </StackPanel>
                     </Grid>
+
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Panel.ZIndex="2">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasNoResults}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <TextBlock Text="{Binding EmptyStateTitle}" FontSize="20" FontWeight="SemiBold"
+                                   HorizontalAlignment="Center" Foreground="{DynamicResource TextForeground}" />
+                        <TextBlock Text="{Binding EmptyStateMessage}" Margin="0,8,0,0"
+                                   HorizontalAlignment="Center" Foreground="{DynamicResource SubtleTextForeground}" />
+                        <Button Content="Clear search" Command="{Binding ClearSearchCommand}"
+                                HorizontalAlignment="Center" Margin="0,16,0,0"
+                                AutomationProperties.Name="Clear search"
+                                Visibility="{Binding HasSearchText, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    </StackPanel>
+
+                    <Border HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="520"
+                            Padding="24" Background="{DynamicResource ControlBackground}"
+                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                            Panel.ZIndex="5"
+                            Visibility="{Binding HasLoadError, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel>
+                            <TextBlock Text="{Binding LoadErrorTitle}" FontSize="20" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextForeground}" HorizontalAlignment="Center" />
+                            <TextBlock Text="{Binding LoadErrorMessage}" TextWrapping="Wrap" MaxWidth="460"
+                                       Margin="0,10,0,16" Foreground="{DynamicResource SubtleTextForeground}" />
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button Content="Try again" Command="{Binding RetryLoadCommand}"
+                                        HorizontalAlignment="Center" Margin="0,0,8,0" AutomationProperties.Name="Retry loading photos" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
                 </Grid>
             </DockPanel>
         </Grid>

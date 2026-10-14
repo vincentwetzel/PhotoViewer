@@ -3,6 +3,7 @@ using System.Data;
 using System.Windows;
 
 using PhotoViewer.ViewModels; // Add this using statement
+using PhotoViewer.Services;
 
 namespace PhotoViewer
 {
@@ -11,17 +12,38 @@ namespace PhotoViewer
     /// </summary>
     public partial class App : System.Windows.Application
     {
+        private readonly DiagnosticsService _diagnostics = new();
+
+        public App()
+        {
+            DispatcherUnhandledException += (_, args) =>
+            {
+                _diagnostics.LogUnhandledException(args.Exception, "DispatcherUnhandledException");
+                args.Handled = true;
+            };
+            AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            {
+                if (args.ExceptionObject is Exception exception)
+                    _diagnostics.LogUnhandledException(exception, "AppDomain.UnhandledException");
+            };
+        }
+
         private void Application_Startup(object sender, StartupEventArgs e)
         {
             // Create the central ViewModel for the application
             var mainWindowViewModel = new MainWindowViewModel();
 
             // This handles opening an image file via "Open with..." or double-click
-            if (e.Args.Length > 0)
+            var fileArguments = e.Args
+                .Where(File.Exists)
+                .Where(MediaFileTypes.IsSupported)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (fileArguments.Length > 0)
             {
-                string filePath = e.Args[0];
-                // Directly open the image in a PhotoWindow, bypassing the main gallery window.
-                mainWindowViewModel.OpenImage(filePath);
+                // Open every file passed by a shell association or drag/drop invocation.
+                foreach (var filePath in fileArguments)
+                    mainWindowViewModel.OpenImage(filePath);
             }
             else
             {

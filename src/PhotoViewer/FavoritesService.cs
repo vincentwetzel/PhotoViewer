@@ -11,10 +11,10 @@ namespace PhotoViewer.Services
         private readonly string _favoritesFilePath;
         private HashSet<string> _favoritePhotoPaths;
 
-        public FavoritesService()
+        public FavoritesService(string? storageDirectory = null)
         {
             var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            var appFolder = Path.Combine(appDataPath, "PhotoViewer");
+            var appFolder = storageDirectory ?? Path.Combine(appDataPath, "PhotoViewer");
             Directory.CreateDirectory(appFolder); // Ensure the directory exists
             _favoritesFilePath = Path.Combine(appFolder, "favorites.json");
 

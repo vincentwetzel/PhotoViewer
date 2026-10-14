@@ -12,8 +12,6 @@ public class LocalFolderProvider : IPhotoProvider
 {
     private readonly string _folderPath;
 
-    private static readonly string[] SupportedExtensions = { ".jpg", ".jpeg", ".png", ".bmp" };
-
     public string SourceName => _folderPath;
 
     public LocalFolderProvider(string folderPath)
@@ -51,7 +49,7 @@ public class LocalFolderProvider : IPhotoProvider
             {
                 if (cancellationToken.IsCancellationRequested) break;
 
-                if (SupportedExtensions.Contains(file.Extension.ToLowerInvariant()))
+                if (MediaFileTypes.IsSupported(file.Extension))
                 {
                     items.Add(new PhotoItem(
                         file.FullName,
@@ -84,7 +82,7 @@ public class LocalFolderProvider : IPhotoProvider
 
         foreach (var file in directory.EnumerateFiles("*.*", SearchOption.AllDirectories))
         {
-            if (SupportedExtensions.Contains(file.Extension.ToLowerInvariant()))
+            if (MediaFileTypes.IsSupported(file.Extension))
             {
                 batch.Add(file.FullName);
 

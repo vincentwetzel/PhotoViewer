@@ -20,13 +20,10 @@ Build output is generated in `bin/` and `obj/` and is ignored by Git.
 
 Use [Project Structure](PROJECT_STRUCTURE.md) to place new files. Keep UI code in views and view models, photo discovery behind `IPhotoProvider`, and persistence in the existing services.
 
-## Integrations and local data
+## Local data
 
-- Google Drive reads `client_secrets.json` from the working directory and stores OAuth tokens under the user's application data.
-- OneDrive uses MSAL and a locally configured public-client ID.
-- Sources, favorites, history, settings, window sizes, and the automatic layout are stored under `%LOCALAPPDATA%\PhotoViewer` (Google OAuth token storage follows Google's application-data path).
-- Do not commit OAuth files, tokens, client IDs intended to remain private, or other credentials.
+Sources, favorites, history, settings, window sizes, and the automatic layout are stored under `%LOCALAPPDATA%\PhotoViewer`.
 
 ## Verification
 
-Run `dotnet build PhotoViewer.sln` after code or XAML changes. Manually verify direct file launch, gallery source selection, layout save/load, theme switching, and cloud authentication when those areas change.
+Run `dotnet build PhotoViewer.sln` after code or XAML changes. Run the Windows test project with `dotnet test tests/PhotoViewer.Tests/PhotoViewer.Tests.csproj` for service and model behavior. Use [Manual Test Matrix](MANUAL_TEST_MATRIX.md) for UI workflows, including import, editing, playback, selection, and window persistence.

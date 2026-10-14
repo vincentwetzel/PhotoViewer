@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Linq;
+using System.IO;
 using PhotoViewer.Services;
 using PhotoViewer.ViewModels;
 
@@ -76,6 +78,37 @@ namespace PhotoViewer
             System.Windows.Application.Current.Shutdown();
         }
 
+        private void MainWindow_DragOver(object sender, System.Windows.DragEventArgs e)
+        {
+            e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop)
+                ? DragDropEffects.Copy
+                : DragDropEffects.None;
+            e.Handled = true;
+        }
+
+        private void MainWindow_Drop(object sender, System.Windows.DragEventArgs e)
+        {
+            if (!e.Data.GetDataPresent(DataFormats.FileDrop) || DataContext is not MainWindowViewModel viewModel)
+                return;
+
+            if (e.Data.GetData(DataFormats.FileDrop) is not string[] paths) return;
+            foreach (var path in paths.Where(File.Exists))
+            {
+                if (IsSupportedMedia(path))
+                    viewModel.OpenImage(path);
+            }
+
+            foreach (var directory in paths.Where(Directory.Exists))
+            {
+                if (viewModel.AddLocalFolderCommand.CanExecute(directory))
+                    viewModel.AddLocalFolderCommand.Execute(directory);
+            }
+            e.Handled = true;
+        }
+
+        private static bool IsSupportedMedia(string path) =>
+            MediaFileTypes.IsSupported(path);
+
         private void MinimizeButton_Click(object sender, RoutedEventArgs e)
         {
             this.WindowState = System.Windows.WindowState.Minimized;
@@ -136,16 +169,132 @@ namespace PhotoViewer
             }
         }
 
+        private void SourceTreeView_PreviewMouseRightButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            var element = e.OriginalSource as DependencyObject;
+            while (element != null && element is not TreeViewItem)
+                element = System.Windows.Media.VisualTreeHelper.GetParent(element);
+
+            if (element is TreeViewItem item)
+            {
+                item.IsSelected = true;
+                item.Focus();
+            }
+        }
+
+        private async void SourceDetailsMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            var source = SourceTreeView.SelectedItem;
+            string name;
+            IProviderCapabilities capabilities;
+            string status;
+            string error = string.Empty;
+
+            if (source is SourceItemViewModel item)
+            {
+                name = item.DisplayName;
+                capabilities = item.Capabilities;
+                status = item.StatusText;
+                error = item.LastError;
+            }
+            else if (source is FolderSourceViewModel folder)
+            {
+                name = folder.DisplayName;
+                capabilities = folder.Capabilities;
+                status = "Local folder";
+            }
+            else return;
+
+            var details = $"Source: {name}\nStatus: {status}\n\n" +
+                          $"Permission summary: {ProviderCapabilities.Describe(capabilities)}\n" +
+                          $"Read: {YesNo(capabilities.CanRead)}\n" +
+                          $"Write: {YesNo(capabilities.CanWrite)}\n" +
+                          $"Delete: {YesNo(capabilities.CanDelete)}\n" +
+                          $"Move: {YesNo(capabilities.CanMove)}\n" +
+                          $"Edit: {YesNo(capabilities.CanEdit)}\n" +
+                          $"Offline capable: {YesNo(capabilities.IsOffline)}";
+            if (!string.IsNullOrWhiteSpace(error)) details += $"\n\nLast error: {error}";
+            details += $"\n\nStorage: {await GetStorageSummaryAsync(source)}";
+            MessageBox.Show(details, "Source details", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private static Task<string> GetStorageSummaryAsync(object? source)
+        {
+            if (source is not FolderSourceViewModel folder)
+                return Task.FromResult("Local storage details are unavailable.");
+
+            return Task.Run(() =>
+            {
+                try
+                {
+                    long bytes = 0;
+                    long files = 0;
+                    foreach (var file in Directory.EnumerateFiles(folder.Provider.SourceName, "*.*", SearchOption.AllDirectories))
+                    {
+                        try
+                        {
+                            bytes += new FileInfo(file).Length;
+                            files++;
+                        }
+                        catch { }
+                    }
+                    return $"{files:N0} files, {FormatBytes(bytes)}";
+                }
+                catch (Exception ex)
+                {
+                    return $"Unavailable ({ex.Message})";
+                }
+            });
+        }
+
+        private static string FormatBytes(long bytes)
+        {
+            string[] units = { "B", "KB", "MB", "GB", "TB" };
+            double value = bytes;
+            int unit = 0;
+            while (value >= 1024 && unit < units.Length - 1)
+            {
+                value /= 1024;
+                unit++;
+            }
+            return $"{value:0.##} {units[unit]}";
+        }
+
+        private static string YesNo(bool value) => value ? "Yes" : "No";
+
         private void PhotoListBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
-            // Only open if an item was added to the selection (not removed)
             if (sender is System.Windows.Controls.ListBox listBox &&
-                e.AddedItems.Count > 0 &&
-                e.AddedItems[0] is PhotoItemViewModel photoVm &&
                 listBox.DataContext is MainWindowViewModel viewModel)
             {
-                viewModel.OpenImage(photoVm.Photo.FilePath);
+                if (viewModel.IsSelectionMode)
+                {
+                    foreach (var item in listBox.Items.OfType<PhotoItemViewModel>())
+                        item.IsSelected = listBox.SelectedItems.Contains(item);
+                    viewModel.NotifySelectionChanged();
+                    return;
+                }
+
+                // Only open if an item was added to the selection (not removed).
+                if (e.AddedItems.Count > 0 && e.AddedItems[0] is PhotoItemViewModel photoVm)
+                    viewModel.OpenImage(photoVm.Photo.FilePath);
             }
+        }
+
+        private void MainWindow_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key == System.Windows.Input.Key.Escape && DataContext is MainWindowViewModel viewModel && viewModel.IsSelectionMode)
+            {
+                viewModel.CancelSelectionCommand.Execute(null);
+                PhotoListBox.UnselectAll();
+                e.Handled = true;
+            }
+        }
+
+        private void PhotoSelectionCheckBox_Changed(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is MainWindowViewModel viewModel)
+                viewModel.NotifySelectionChanged();
         }
 
         /// <summary>
@@ -320,10 +469,10 @@ namespace PhotoViewer
                     }
                 }
             }
-            else if (selectedItem is PhotoViewer.ViewModels.SourceItemViewModel cloudSource)
+            else if (selectedItem is PhotoViewer.ViewModels.SourceItemViewModel collectionSource)
             {
                 if (DataContext is PhotoViewer.ViewModels.MainWindowViewModel vm3)
-                    vm3.SelectedSource = cloudSource;
+                    vm3.SelectedSource = collectionSource;
             }
         }
 

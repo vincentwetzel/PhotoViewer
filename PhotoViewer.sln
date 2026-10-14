@@ -4,6 +4,8 @@ VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhotoViewer", "src\PhotoViewer\PhotoViewer.csproj", "{C20645DC-3BF5-2FE0-20F4-F04846E054EC}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhotoViewer.Tests", "tests\PhotoViewer.Tests\PhotoViewer.Tests.csproj", "{1E96D605-1880-4D47-9E48-2E7DD4D8F8F4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -14,6 +16,10 @@ Global
 		{C20645DC-3BF5-2FE0-20F4-F04846E054EC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C20645DC-3BF5-2FE0-20F4-F04846E054EC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C20645DC-3BF5-2FE0-20F4-F04846E054EC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1E96D605-1880-4D47-9E48-2E7DD4D8F8F4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1E96D605-1880-4D47-9E48-2E7DD4D8F8F4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1E96D605-1880-4D47-9E48-2E7DD4D8F8F4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1E96D605-1880-4D47-9E48-2E7DD4D8F8F4}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -7,9 +7,15 @@
 
 ## Gallery shell
 
-`MainWindow` contains a source navigation pane and a photo gallery. Built-in collections are Gallery, Favorites, and Recently Viewed. User sources are local folder trees, OneDrive, and Google Drive. iCloud Photos is discovered as a local folder provider; phone import is not implemented.
+`MainWindow` contains a source navigation pane and a photo/video gallery. Built-in collections are Gallery, Favorites, and Recently Viewed. User sources are local folder trees. Import copies selected supported media files into a chosen local folder with duplicate detection, progress reporting, and cancellation. Phone/MTP import is not implemented.
 
-The gallery supports single-click opening, filename/date/size sorting in ascending or descending order, filtering, favorite toggling, photo counts, progressive loading, and cached source results. Local folder trees update through `FileSystemWatcher`.
+The gallery supports single-click opening, Date taken/created/modified, Name,
+and file-size sorting in ascending or descending order, composable
+filename/path/date and media-type filtering, selection mode with bulk favorite
+toggling and local file actions, thumbnail density control, favorite toggling,
+photo/video counts, progressive loading, and cached source results. Date-based
+gallery grouping follows the selected date sort. Local folder trees update
+through `FileSystemWatcher`.
 
 ## Photo window
 
@@ -20,6 +26,20 @@ Each `PhotoWindow` displays one image and supports:
 - Previous/next navigation with overlay buttons or the Left/Right keys.
 - Delete confirmation followed by moving the file to the Recycle Bin.
 - Independent position, size, maximized state, zoom, and pan state.
+- A dark presentation surface, fit/actual-size/reset zoom controls, keyboard
+  shortcuts, and an optional file information panel.
+- Non-destructive session edits: rotate, flip, straighten, preset crop,
+  adjustments, filters, annotations, markup, undo/redo, reset, and cancel.
+- Save As export to JPEG, PNG, or BMP. The original stays unchanged by editing;
+  edits are not saved as drafts when the window closes.
+- Video playback controls for supported local media, including play/pause,
+  seeking, and volume. Codec availability depends on Windows.
+
+## Settings
+
+Settings are stored as versioned JSON under `%LOCALAPPDATA%\\PhotoViewer`. The
+settings page applies theme, gallery sort/filter/density, delete confirmation,
+mouse-wheel zoom, and file-location visibility changes immediately.
 
 ## Layout persistence
 

@@ -4,13 +4,186 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="{Binding FilePath}" Height="450" Width="800"
+        Title="{Binding FilePath}" AutomationProperties.Name="PhotoViewer photo viewer" Height="450" Width="800"
         KeyDown="PhotoWindow_KeyDown"
-        Background="{DynamicResource WindowBackground}">
-    <!-- TODO: Add a converter for the title later to show just the file name -->
-    <Grid Background="{DynamicResource WindowBackground}">
+        Background="{DynamicResource ViewerBackground}">
+    <Grid Background="{DynamicResource ViewerBackground}">
+        <Grid.Resources>
+            <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        </Grid.Resources>
         <!-- The Image control will display the photo. Zoom and Pan will be applied via its RenderTransform. -->
-        <Image x:Name="PhotoImage" Source="{Binding ImageSource}" Stretch="Uniform" />
+        <InkCanvas x:Name="MarkupCanvas" Background="Transparent" Visibility="Collapsed" IsHitTestVisible="False"
+                   Panel.ZIndex="2" StrokeCollected="MarkupCanvas_StrokeCollected" />
+        <Image x:Name="PhotoImage" Source="{Binding ImageSource}" Stretch="Uniform"
+               AutomationProperties.Name="Current photo" />
+        <MediaElement x:Name="VideoPlayer" LoadedBehavior="Manual" UnloadedBehavior="Manual"
+                      Stretch="Uniform" Visibility="Collapsed"
+                      AutomationProperties.Name="Current video"
+                      MediaOpened="VideoPlayer_MediaOpened" MediaEnded="VideoPlayer_MediaEnded"
+                      MediaFailed="VideoPlayer_MediaFailed" />
+
+        <Border VerticalAlignment="Top" Background="{DynamicResource ControlBackground}"
+                Padding="14,8" Panel.ZIndex="3">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Opacity" Value="0" />
+                    <Style.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Opacity" Value="0.94" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter Property="Opacity" Value="0.94" />
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <DockPanel LastChildFill="True">
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                    <Button Content="Fit" Click="FitButton_Click" ToolTip="Fit image (F)" AutomationProperties.Name="Fit image" Margin="0,0,4,0" />
+                    <Button Content="100%" Click="ActualSizeButton_Click" ToolTip="Actual size (1)" AutomationProperties.Name="View at actual size" Margin="0,0,4,0" />
+                    <Button Content="Reset" Click="ResetZoomButton_Click" ToolTip="Reset zoom (0)" AutomationProperties.Name="Reset zoom" />
+                    <Menu Background="Transparent" Foreground="{DynamicResource TextForeground}"
+                          VerticalAlignment="Center" Margin="8,0,0,0">
+                        <MenuItem Header="Zoom">
+                            <MenuItem Header="50%" Tag="0.5" Click="ZoomMenuItem_Click" />
+                            <MenuItem Header="100%" Tag="1" Click="ZoomMenuItem_Click" />
+                            <MenuItem Header="150%" Tag="1.5" Click="ZoomMenuItem_Click" />
+                            <MenuItem Header="200%" Tag="2" Click="ZoomMenuItem_Click" />
+                            <MenuItem Header="400%" Tag="4" Click="ZoomMenuItem_Click" />
+                        </MenuItem>
+                    </Menu>
+                    <Button x:Name="FavoriteButton" Content="Favorite" Click="FavoriteButton_Click"
+                            ToolTip="Favorite or unfavorite (V)" AutomationProperties.Name="Toggle favorite" Margin="8,0,4,0" />
+                    <Button Content="Copy" Click="CopyButton_Click" ToolTip="Copy file to clipboard" AutomationProperties.Name="Copy file" Margin="0,0,4,0" />
+                </StackPanel>
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock x:Name="FileNameText" Text="Photo" HorizontalAlignment="Center"
+                               FontWeight="SemiBold" Foreground="{DynamicResource TextForeground}"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="EditStatusText" Text="Original" HorizontalAlignment="Center"
+                               FontSize="11" Foreground="{DynamicResource SubtleTextForeground}" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                    <TextBlock x:Name="ZoomText" Text="100%" VerticalAlignment="Center"
+                               Margin="0,0,12,0" Foreground="{DynamicResource SubtleTextForeground}" />
+                    <Menu Background="Transparent" Foreground="{DynamicResource TextForeground}"
+                          VerticalAlignment="Center" Margin="0,0,8,0">
+                        <MenuItem Header="Open with">
+                            <MenuItem Header="Choose an app..." Click="OpenWithMenuItem_Click" />
+                            <MenuItem Header="Open containing folder" Click="OpenContainingFolderMenuItem_Click" />
+                        </MenuItem>
+                    </Menu>
+                    <Button Content="Info" Click="InfoButton_Click" ToolTip="Show file information" AutomationProperties.Name="Show file information" />
+                    <Button Content="Adjust" Click="AdjustmentsButton_Click" ToolTip="Show image adjustments" AutomationProperties.Name="Show image adjustments" Margin="8,0,0,0" />
+                    <Menu Background="Transparent" Foreground="{DynamicResource TextForeground}"
+                          VerticalAlignment="Center" Margin="8,0,0,0">
+                        <MenuItem Header="More">
+                            <MenuItem x:Name="SaveAsMenuItem" Header="Save as..." Click="SaveAsMenuItem_Click"
+                                      AutomationProperties.Name="Save edited photo copy" />
+                            <MenuItem x:Name="UndoEditMenuItem" Header="Undo edit" Click="UndoEditMenuItem_Click" />
+                            <MenuItem x:Name="RedoEditMenuItem" Header="Redo edit" Click="RedoEditMenuItem_Click" />
+                            <MenuItem x:Name="ResetEditsMenuItem" Header="Reset edits" Click="ResetEditsMenuItem_Click" />
+                            <MenuItem x:Name="CancelEditsMenuItem" Header="Cancel edits" Click="CancelEditsMenuItem_Click" />
+                            <MenuItem x:Name="FlipHorizontalMenuItem" Header="Flip horizontally" Click="FlipHorizontalMenuItem_Click" />
+                            <MenuItem x:Name="CropMenuItem" Header="Crop" IsEnabled="True" AutomationProperties.Name="Crop image">
+                                <MenuItem x:Name="CropSquareMenuItem" Header="Square (1:1)" Tag="1" Click="CropPresetMenuItem_Click" AutomationProperties.Name="Crop image square" />
+                                <MenuItem x:Name="CropFourThreeMenuItem" Header="4:3" Tag="1.3333333333" Click="CropPresetMenuItem_Click" AutomationProperties.Name="Crop image to 4 by 3" />
+                                <MenuItem x:Name="CropSixteenNineMenuItem" Header="16:9" Tag="1.7777777778" Click="CropPresetMenuItem_Click" AutomationProperties.Name="Crop image to 16 by 9" />
+                            </MenuItem>
+                            <MenuItem x:Name="StraightenMenuItem" Header="Straighten" AutomationProperties.Name="Straighten image">
+                                <MenuItem Header="Straighten left 5°" Click="StraightenMenuItem_Click" Tag="-5" />
+                                <MenuItem Header="Straighten right 5°" Click="StraightenMenuItem_Click" Tag="5" />
+                                <MenuItem Header="Reset straighten" Click="StraightenResetMenuItem_Click" AutomationProperties.Name="Reset image straighten" />
+                            </MenuItem>
+                            <MenuItem x:Name="FiltersMenuItem" Header="Filters" AutomationProperties.Name="Image filters">
+                                <MenuItem Header="Original" Tag="None" Click="FilterMenuItem_Click" AutomationProperties.Name="Original colors" />
+                                <MenuItem Header="Grayscale" Tag="Grayscale" Click="FilterMenuItem_Click" AutomationProperties.Name="Grayscale filter" />
+                                <MenuItem Header="Sepia" Tag="Sepia" Click="FilterMenuItem_Click" AutomationProperties.Name="Sepia filter" />
+                                <MenuItem Header="High contrast" Tag="HighContrast" Click="FilterMenuItem_Click" AutomationProperties.Name="High contrast filter" />
+                            </MenuItem>
+                            <MenuItem x:Name="AnnotationMenuItem" Header="Annotation" Click="AnnotationMenuItem_Click" AutomationProperties.Name="Add image annotation" />
+                            <MenuItem x:Name="MarkupMenuItem" Header="Draw markup" Click="MarkupMenuItem_Click" AutomationProperties.Name="Draw image markup" />
+                            <MenuItem x:Name="ClearMarkupMenuItem" Header="Clear markup" Click="ClearMarkupMenuItem_Click" AutomationProperties.Name="Clear image markup" />
+                            <MenuItem x:Name="BackgroundMenuItem" Header="Background" AutomationProperties.Name="Image background">
+                                <MenuItem Header="Original" Tag="None" Click="BackgroundMenuItem_Click" />
+                                <MenuItem Header="White" Tag="White" Click="BackgroundMenuItem_Click" />
+                                <MenuItem Header="Black" Tag="Black" Click="BackgroundMenuItem_Click" />
+                                <Separator />
+                                <MenuItem Header="Remove subject background" Tag="RemoveSubject" Click="BackgroundMenuItem_Click"
+                                          AutomationProperties.Name="Remove subject background using edge-color heuristic" />
+                                <MenuItem Header="Subject on white" Tag="SubjectWhite" Click="BackgroundMenuItem_Click"
+                                          AutomationProperties.Name="Remove subject background and replace with white" />
+                                <MenuItem Header="Subject on black" Tag="SubjectBlack" Click="BackgroundMenuItem_Click"
+                                          AutomationProperties.Name="Remove subject background and replace with black" />
+                            </MenuItem>
+                            <MenuItem Header="Print" Click="PrintMenuItem_Click" />
+                            <MenuItem x:Name="RotateEditMenuItem" Header="Rotate 90°" Click="RotateMenuItem_Click" />
+                            <Separator />
+                            <MenuItem Header="Delete" Click="DeleteMenuItem_Click" />
+                        </MenuItem>
+                    </Menu>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <Border x:Name="InfoPanel" Visibility="Collapsed" HorizontalAlignment="Right" VerticalAlignment="Top"
+                Margin="0,52,14,0" Padding="16" Background="{DynamicResource ControlBackground}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Panel.ZIndex="4" MinWidth="260">
+            <StackPanel>
+                <TextBlock Text="File information" FontWeight="SemiBold" FontSize="16"
+                           Foreground="{DynamicResource TextForeground}" />
+                <TextBlock x:Name="InfoFileName" Margin="0,12,0,0" Foreground="{DynamicResource TextForeground}" TextWrapping="Wrap" />
+                <TextBlock x:Name="InfoDimensions" Margin="0,6,0,0" Foreground="{DynamicResource SubtleTextForeground}" />
+                <TextBlock x:Name="InfoDate" Margin="0,4,0,0" Foreground="{DynamicResource SubtleTextForeground}" />
+                <TextBlock x:Name="InfoFileSize" Margin="0,4,0,0" Foreground="{DynamicResource SubtleTextForeground}" />
+                <TextBlock x:Name="InfoLocation" Margin="0,4,0,0" Foreground="{DynamicResource SubtleTextForeground}" TextWrapping="Wrap" />
+                <TextBlock x:Name="InfoProvider" Text="Provider: Local file" Margin="0,4,0,0" Foreground="{DynamicResource SubtleTextForeground}" />
+                <TextBlock x:Name="EditUnavailableText" TextWrapping="Wrap" Margin="0,12,0,0"
+                           Foreground="{DynamicResource SubtleTextForeground}" Visibility="Collapsed" />
+            </StackPanel>
+        </Border>
+
+        <Border x:Name="AdjustmentsPanel" Visibility="Collapsed" HorizontalAlignment="Left" VerticalAlignment="Top"
+                Margin="14,52,0,0" Padding="14" Background="{DynamicResource ControlBackground}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Panel.ZIndex="4" MinWidth="250">
+            <StackPanel>
+                <TextBlock Text="Adjustments" FontWeight="SemiBold" FontSize="16" Foreground="{DynamicResource TextForeground}" />
+                <TextBlock Text="Preview changes are non-destructive until Save As." TextWrapping="Wrap" Margin="0,4,0,10" Foreground="{DynamicResource SubtleTextForeground}" />
+                <TextBlock Text="Exposure" Foreground="{DynamicResource TextForeground}" />
+                <Slider x:Name="ExposureSlider" Minimum="-2" Maximum="2" ValueChanged="AdjustmentSlider_ValueChanged" AutomationProperties.Name="Exposure" />
+                <TextBlock Text="Brightness" Foreground="{DynamicResource TextForeground}" />
+                <Slider x:Name="BrightnessSlider" Minimum="-1" Maximum="1" ValueChanged="AdjustmentSlider_ValueChanged" AutomationProperties.Name="Brightness" />
+                <TextBlock Text="Contrast" Foreground="{DynamicResource TextForeground}" />
+                <Slider x:Name="ContrastSlider" Minimum="-1" Maximum="1" ValueChanged="AdjustmentSlider_ValueChanged" AutomationProperties.Name="Contrast" />
+                <TextBlock Text="Highlights" Foreground="{DynamicResource TextForeground}" />
+                <Slider x:Name="HighlightsSlider" Minimum="-1" Maximum="1" ValueChanged="AdjustmentSlider_ValueChanged" AutomationProperties.Name="Highlights" />
+                <TextBlock Text="Shadows" Foreground="{DynamicResource TextForeground}" />
+                <Slider x:Name="ShadowsSlider" Minimum="-1" Maximum="1" ValueChanged="AdjustmentSlider_ValueChanged" AutomationProperties.Name="Shadows" />
+                <TextBlock Text="Saturation" Foreground="{DynamicResource TextForeground}" />
+                <Slider x:Name="SaturationSlider" Minimum="-1" Maximum="1" ValueChanged="AdjustmentSlider_ValueChanged" AutomationProperties.Name="Saturation" />
+                <TextBlock Text="Temperature" Foreground="{DynamicResource TextForeground}" />
+                <Slider x:Name="TemperatureSlider" Minimum="-1" Maximum="1" ValueChanged="AdjustmentSlider_ValueChanged" AutomationProperties.Name="Temperature" />
+                <TextBlock Text="Tint" Foreground="{DynamicResource TextForeground}" />
+                <Slider x:Name="TintSlider" Minimum="-1" Maximum="1" ValueChanged="AdjustmentSlider_ValueChanged" AutomationProperties.Name="Tint" />
+                <TextBlock Text="Sharpness" Foreground="{DynamicResource TextForeground}" />
+                <Slider x:Name="SharpnessSlider" Minimum="0" Maximum="1" ValueChanged="AdjustmentSlider_ValueChanged" AutomationProperties.Name="Sharpness" />
+                <Button x:Name="ResetAdjustmentsButton" Content="Reset adjustments" Click="ResetAdjustmentsButton_Click" HorizontalAlignment="Left" Margin="0,10,0,0" AutomationProperties.Name="Reset image adjustments" />
+            </StackPanel>
+        </Border>
+
+        <Border x:Name="AnnotationPanel" Visibility="Collapsed" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                Margin="14,0,0,92" Padding="14" Background="{DynamicResource ControlBackground}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Panel.ZIndex="4" MinWidth="300">
+            <StackPanel>
+                <TextBlock Text="Annotation" FontWeight="SemiBold" Foreground="{DynamicResource TextForeground}" />
+                <TextBox x:Name="AnnotationTextBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70" Margin="0,8,0,8"
+                         AutomationProperties.Name="Image annotation text" />
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="Apply" Click="ApplyAnnotationButton_Click" AutomationProperties.Name="Apply image annotation" Margin="0,0,6,0" />
+                    <Button Content="Clear" Click="ClearAnnotationButton_Click" AutomationProperties.Name="Clear image annotation" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
 
         <!-- Navigation Arrows -->
         <Button x:Name="PreviousButton" Content="&#8249;"
@@ -19,7 +192,7 @@
                 Background="{DynamicResource ControlBackground}" Foreground="{DynamicResource TextForeground}" BorderThickness="0"
                 FontFamily="Segoe UI" FontSize="48" FontWeight="Light"
                 Opacity="0.5" Cursor="Hand"
-                Click="PreviousButton_Click">
+                Click="PreviousButton_Click" AutomationProperties.Name="Previous photo">
             <Button.Style>
                 <Style TargetType="Button">
                     <Setter Property="Opacity" Value="0.5" />
@@ -39,7 +212,7 @@
                 Background="{DynamicResource ControlBackground}" Foreground="{DynamicResource TextForeground}" BorderThickness="0"
                 FontFamily="Segoe UI" FontSize="48" FontWeight="Light"
                 Opacity="0.5" Cursor="Hand"
-                Click="NextButton_Click">
+                Click="NextButton_Click" AutomationProperties.Name="Next photo">
             <Button.Style>
                 <Style TargetType="Button">
                     <Setter Property="Opacity" Value="0.5" />
@@ -52,5 +225,68 @@
                 </Style>
             </Button.Style>
         </Button>
+
+        <Border VerticalAlignment="Bottom" Background="{DynamicResource ControlBackground}" Opacity="0.92"
+                Padding="8,6" Panel.ZIndex="3">
+            <StackPanel>
+                <StackPanel x:Name="VideoControls" Orientation="Horizontal" Visibility="Collapsed"
+                            Margin="0,0,0,6">
+                    <Button x:Name="VideoPlayButton" Content="Play" Click="VideoPlayButton_Click"
+                            ToolTip="Play or pause video" AutomationProperties.Name="Play or pause video" Margin="0,0,6,0" />
+                    <Slider x:Name="VideoProgress" Minimum="0" Maximum="1" ValueChanged="VideoProgress_ValueChanged"
+                            Width="260" VerticalAlignment="Center" Margin="0,0,8,0" AutomationProperties.Name="Video position" />
+                    <TextBlock Text="Volume" VerticalAlignment="Center" Foreground="{DynamicResource SubtleTextForeground}" Margin="0,0,5,0" />
+                    <Slider x:Name="VideoVolume" Minimum="0" Maximum="1" Value="0.8"
+                            Width="90" VerticalAlignment="Center" ValueChanged="VideoVolume_ValueChanged" AutomationProperties.Name="Video volume" />
+                    <TextBlock x:Name="VideoStatusText" VerticalAlignment="Center" Margin="10,0,0,0"
+                               Foreground="{DynamicResource SubtleTextForeground}" />
+                </StackPanel>
+                <ListBox x:Name="Filmstrip" Height="68" ItemsSource="{Binding NavigationItems}"
+                         AutomationProperties.Name="Related media filmstrip"
+                         SelectionChanged="Filmstrip_SelectionChanged"
+                         Background="Transparent" BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                         ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <VirtualizingStackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="AutomationProperties.Name" Value="{Binding FilePath}" />
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="Margin" Value="2" />
+                        <Setter Property="BorderThickness" Value="0" />
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Border Width="76" Height="56" CornerRadius="5" ClipToBounds="True"
+                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                            <Grid>
+                                <Image Source="{Binding FilePath}" Stretch="UniformToFill" />
+                                <Border Background="{DynamicResource ControlBackground}" Padding="4,1"
+                                        HorizontalAlignment="Left" VerticalAlignment="Bottom">
+                                    <TextBlock Text="VIDEO" FontSize="9" Foreground="{DynamicResource TextForeground}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsVideo}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
+        </Border>
     </Grid>
 </Window>

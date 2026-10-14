@@ -16,6 +16,7 @@ namespace PhotoViewer.ViewModels
     public class FolderSourceViewModel : INotifyPropertyChanged, IDisposable
     {
         public LocalFolderProvider Provider { get; }
+        public IProviderCapabilities Capabilities { get; }
         public FolderNode Root { get; }
 
         public string DisplayName { get; }
@@ -54,6 +55,7 @@ namespace PhotoViewer.ViewModels
         public FolderSourceViewModel(LocalFolderProvider provider)
         {
             Provider = provider;
+            Capabilities = ProviderCapabilities.For(provider);
             // Create root with RootSource set before children are loaded
             Root = new FolderNode(provider.SourceName);
             Root.RootSource = this;
@@ -82,8 +84,7 @@ namespace PhotoViewer.ViewModels
             try
             {
                 count = Directory.EnumerateFiles(node.FullName, "*.*")
-                    .Count(f => new[] { ".jpg", ".jpeg", ".png", ".bmp" }
-                        .Contains(System.IO.Path.GetExtension(f).ToLowerInvariant()));
+                    .Count(f => MediaFileTypes.IsSupported(System.IO.Path.GetExtension(f)));
             }
             catch { }
 

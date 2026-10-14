@@ -12,10 +12,10 @@ namespace PhotoViewer.Services
         private List<string> _recentPhotoPaths;
         private const int MaxHistorySize = 100;
 
-        public HistoryService()
+        public HistoryService(string? storageDirectory = null)
         {
             var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            var appFolder = Path.Combine(appDataPath, "PhotoViewer");
+            var appFolder = storageDirectory ?? Path.Combine(appDataPath, "PhotoViewer");
             Directory.CreateDirectory(appFolder);
             _historyFilePath = Path.Combine(appFolder, "history.json");
             _recentPhotoPaths = LoadHistoryFromFile();

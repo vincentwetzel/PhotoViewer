@@ -15,20 +15,33 @@ using System.Windows.Data;
 using System.Windows;
 using System.Diagnostics;
 using Microsoft.Win32;
+using Microsoft.VisualBasic.FileIO;
+using System.Collections.Specialized;
 
 namespace PhotoViewer.ViewModels
 {
     public class MainWindowViewModel : INotifyPropertyChanged
     {
         public ICommand OpenImageCommand { get; }
+        public ICommand ImportCommand { get; }
         public ICommand SaveLayoutCommand { get; }
         public ICommand LoadLayoutCommand { get; }
         public ICommand AddLocalFolderCommand { get; }
-        public ICommand AddOneDriveAccountCommand { get; }
         public ICommand ToggleFavoriteCommand { get; }
         public ICommand RemoveSourceCommand { get; }
-        public ICommand AddGoogleDriveAccountCommand { get; }
         public ICommand OpenSettingsCommand { get; }
+        public ICommand ClearSearchCommand { get; }
+        public ICommand EnterSelectionModeCommand { get; }
+        public ICommand SelectAllCommand { get; }
+        public ICommand SelectNoneCommand { get; }
+        public ICommand CancelSelectionCommand { get; }
+        public ICommand ToggleSelectedFavoritesCommand { get; }
+        public ICommand RetryLoadCommand { get; }
+        public ICommand DeleteSelectedCommand { get; }
+        public ICommand CopySelectedCommand { get; }
+        public ICommand OpenWithSelectedCommand { get; }
+        public ICommand MoveSelectedCommand { get; }
+        public ICommand ToggleNavigationCommand { get; }
 
         private string _selectedTheme = "System";
         public string SelectedTheme
@@ -49,8 +62,6 @@ namespace PhotoViewer.ViewModels
         private readonly PhotoWindowSizeService _photoWindowSizeService;
         private readonly MainWindowSizeService _mainWindowSizeService;
         private CancellationTokenSource? _photoLoadingCts;
-        private readonly OneDriveAuthenticationService _oneDriveAuthService;
-        private readonly GoogleAuthenticationService _googleAuthService;
         private readonly FavoritesService _favoritesService;
         private readonly HistoryService _historyService;
         private readonly SourcePersistenceService _sourcePersistenceService;
@@ -65,6 +76,7 @@ namespace PhotoViewer.ViewModels
                 if (_isLoading == value) return;
                 _isLoading = value;
                 OnPropertyChanged(nameof(IsLoading));
+                OnPropertyChanged(nameof(HasNoResults));
             }
         }
 
@@ -113,7 +125,7 @@ namespace PhotoViewer.ViewModels
         public ObservableCollection<object> Sources { get; } = new();
         /// <summary>Collection sources: Gallery, Favorites, Recently Viewed.</summary>
         public ObservableCollection<SourceItemViewModel> CollectionSources { get; } = new();
-        /// <summary>User sources: Folders (as FolderSourceViewModel), OneDrive, Google Drive.</summary>
+        /// <summary>User sources: local folder trees.</summary>
         public ObservableCollection<object> UserSources { get; } = new();
 
         /// <summary>The photo collection displayed in the gallery view. Uses RangeObservableCollection for instant batch updates.</summary>
@@ -128,7 +140,12 @@ namespace PhotoViewer.ViewModels
         public int TotalPhotoCount
         {
             get => _totalPhotoCount;
-            set { _totalPhotoCount = value; OnPropertyChanged(nameof(TotalPhotoCount)); }
+            set
+            {
+                _totalPhotoCount = value;
+                OnPropertyChanged(nameof(TotalPhotoCount));
+                OnPropertyChanged(nameof(PhotoSummary));
+            }
         }
 
         private object? _selectedSource;
@@ -140,6 +157,11 @@ namespace PhotoViewer.ViewModels
                 if (_selectedSource == value) return;
                 _selectedSource = value;
                 OnPropertyChanged(nameof(SelectedSource));
+                OnPropertyChanged(nameof(SearchScope));
+                OnPropertyChanged(nameof(GalleryTitle));
+                OnPropertyChanged(nameof(PhotoSummary));
+                OnPropertyChanged(nameof(DateRangeSummary));
+                OnPropertyChanged(nameof(LoadErrorTitle));
                 LoadPhotosForSelectedSourceAsync();
             }
         }
@@ -153,9 +175,9 @@ namespace PhotoViewer.ViewModels
             LoadPhotosForSelectedSourceAsync();
         }
 
-        public List<string> SortOptions { get; } = new List<string> { "File Name", "Date Created", "File Size" };
+        public List<string> SortOptions { get; } = new List<string> { "Date taken", "Date created", "Date modified", "Name", "File size" };
 
-        private string _selectedSortOption = "File Name";
+        private string _selectedSortOption = "Name";
         public string SelectedSortOption
         {
             get => _selectedSortOption;
@@ -165,6 +187,7 @@ namespace PhotoViewer.ViewModels
                 _selectedSortOption = value;
                 OnPropertyChanged(nameof(SelectedSortOption));
                 ApplySort();
+                SaveGalleryPreferences();
             }
         }
 
@@ -180,10 +203,13 @@ namespace PhotoViewer.ViewModels
                 _selectedSortDirection = value;
                 OnPropertyChanged(nameof(SelectedSortDirection));
                 ApplySort();
+                SaveGalleryPreferences();
             }
         }
 
         private string _searchText = string.Empty;
+        private readonly System.Windows.Threading.DispatcherTimer _searchDebounceTimer =
+            new(System.Windows.Threading.DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(250) };
         public string SearchText
         {
             get => _searchText;
@@ -192,27 +218,231 @@ namespace PhotoViewer.ViewModels
                 if (_searchText == value) return;
                 _searchText = value;
                 OnPropertyChanged(nameof(SearchText));
-                PhotosView.Refresh();
+                OnPropertyChanged(nameof(HasSearchText));
+                OnPropertyChanged(nameof(EmptyStateTitle));
+                OnPropertyChanged(nameof(EmptyStateMessage));
+                _searchDebounceTimer.Stop();
+                _searchDebounceTimer.Start();
             }
         }
+
+        public bool HasSearchText => !string.IsNullOrWhiteSpace(SearchText);
+
+        public bool HasNoSearchResults => HasSearchText && PhotosView.Cast<object>().Count() == 0;
+
+        public bool HasNoResults => !IsLoading && PhotosView.Cast<object>().Count() == 0;
+
+        public string EmptyStateTitle => HasSearchText ? "No matching photos" : "No photos in this collection";
+
+        public string EmptyStateMessage => HasSearchText
+            ? "Try a different name, date, or media type."
+            : "Add a folder or import photos to start building your gallery.";
+
+        private string _loadErrorMessage = string.Empty;
+        public string LoadErrorMessage
+        {
+            get => _loadErrorMessage;
+            private set { _loadErrorMessage = value; OnPropertyChanged(nameof(LoadErrorMessage)); OnPropertyChanged(nameof(HasLoadError)); }
+        }
+
+        public bool HasLoadError => !string.IsNullOrWhiteSpace(LoadErrorMessage);
+
+        public string LoadErrorTitle => "This local source is unavailable";
+
+        private string _loadWarningMessage = string.Empty;
+        public string LoadWarningMessage
+        {
+            get => _loadWarningMessage;
+            private set { _loadWarningMessage = value; OnPropertyChanged(nameof(LoadWarningMessage)); OnPropertyChanged(nameof(HasLoadWarning)); }
+        }
+
+        public bool HasLoadWarning => !string.IsNullOrWhiteSpace(LoadWarningMessage);
+
+        public List<string> MediaTypeOptions { get; } = new() { "All media", "Photos", "Videos" };
+
+        private string _selectedMediaType = "All media";
+        public string SelectedMediaType
+        {
+            get => _selectedMediaType;
+            set
+            {
+                if (_selectedMediaType == value) return;
+                _selectedMediaType = value;
+                OnPropertyChanged(nameof(SelectedMediaType));
+                PhotosView.Refresh();
+                UpdateDateGrouping();
+                OnPropertyChanged(nameof(HasNoSearchResults));
+                OnPropertyChanged(nameof(HasNoResults));
+                SaveGalleryPreferences();
+            }
+        }
+
+        public List<double> ThumbnailSizeOptions { get; } = new() { 140, 180, 230 };
+
+        private double _thumbnailRowHeight = 180;
+        public double ThumbnailRowHeight
+        {
+            get => _thumbnailRowHeight;
+            set
+            {
+                if (Math.Abs(_thumbnailRowHeight - value) < 0.1) return;
+                _thumbnailRowHeight = value;
+                OnPropertyChanged(nameof(ThumbnailRowHeight));
+                SaveGalleryPreferences();
+            }
+        }
+
+        private bool _confirmDelete = true;
+        public bool ConfirmDelete
+        {
+            get => _confirmDelete;
+            set { if (_confirmDelete == value) return; _confirmDelete = value; OnPropertyChanged(nameof(ConfirmDelete)); SaveGalleryPreferences(); }
+        }
+
+        private bool _mouseWheelZoom = true;
+        public bool MouseWheelZoom
+        {
+            get => _mouseWheelZoom;
+            set { if (_mouseWheelZoom == value) return; _mouseWheelZoom = value; OnPropertyChanged(nameof(MouseWheelZoom)); SaveGalleryPreferences(); }
+        }
+
+        private bool _showFileLocation = true;
+        public bool ShowFileLocation
+        {
+            get => _showFileLocation;
+            set { if (_showFileLocation == value) return; _showFileLocation = value; OnPropertyChanged(nameof(ShowFileLocation)); SaveGalleryPreferences(); }
+        }
+
+        public List<double> ViewerZoomOptions { get; } = new() { 1.0, 1.5, 2.0 };
+
+        private double _defaultViewerZoom = 1.0;
+        public double DefaultViewerZoom
+        {
+            get => _defaultViewerZoom;
+            set
+            {
+                if (Math.Abs(_defaultViewerZoom - value) < 0.01) return;
+                _defaultViewerZoom = value;
+                OnPropertyChanged(nameof(DefaultViewerZoom));
+                SaveGalleryPreferences();
+            }
+        }
+
+        private bool _allowAnonymousDiagnostics;
+        public bool AllowAnonymousDiagnostics
+        {
+            get => _allowAnonymousDiagnostics;
+            set { if (_allowAnonymousDiagnostics == value) return; _allowAnonymousDiagnostics = value; OnPropertyChanged(nameof(AllowAnonymousDiagnostics)); SaveGalleryPreferences(); }
+        }
+
+        private bool _personalizedExperiences;
+        public bool PersonalizedExperiences
+        {
+            get => _personalizedExperiences;
+            set { if (_personalizedExperiences == value) return; _personalizedExperiences = value; OnPropertyChanged(nameof(PersonalizedExperiences)); SaveGalleryPreferences(); }
+        }
+
+        private bool _reduceMotion;
+        public bool ReduceMotion
+        {
+            get => _reduceMotion;
+            set { if (_reduceMotion == value) return; _reduceMotion = value; OnPropertyChanged(nameof(ReduceMotion)); SaveGalleryPreferences(); }
+        }
+
+        private bool _isSelectionMode;
+        public bool IsSelectionMode
+        {
+            get => _isSelectionMode;
+            private set
+            {
+                if (_isSelectionMode == value) return;
+                _isSelectionMode = value;
+                OnPropertyChanged(nameof(IsSelectionMode));
+            }
+        }
+
+        public int SelectedPhotoCount => PhotoSelectionService.Count(_photos);
+
+        public string GalleryTitle => SelectedSource is SourceItemViewModel source
+            ? source.DisplayName
+            : "Gallery";
+
+        public string SearchScope => SelectedSource is SourceItemViewModel source
+            ? $"Search {source.DisplayName}"
+            : "Search photos";
+
+        public string PhotoSummary
+        {
+            get
+            {
+                var photos = _photos.Count(item => !item.Photo.IsVideo);
+                var videos = _photos.Count(item => item.Photo.IsVideo);
+                if (_totalPhotoCount > 0 && _photos.Count == 0)
+                    return $"{_totalPhotoCount} items";
+                if (videos == 0) return $"{photos} photos";
+                if (photos == 0) return $"{videos} videos";
+                return $"{photos} photos · {videos} videos";
+            }
+        }
+
+        public string DateRangeSummary
+        {
+            get
+            {
+                var dates = _photos.Select(item => item.Photo.DateTaken)
+                    .Where(date => date != default)
+                    .Select(date => date.ToLocalTime().Date)
+                    .Distinct()
+                    .OrderBy(date => date)
+                    .ToList();
+                if (dates.Count == 0) return "Date unavailable";
+                if (dates[0] == dates[^1]) return dates[0].ToString("MMMM d, yyyy");
+                return $"{dates[0]:MMM d, yyyy} – {dates[^1]:MMM d, yyyy}";
+            }
+        }
+
+        private bool _isNavigationPaneCollapsed;
+        public bool IsNavigationPaneCollapsed
+        {
+            get => _isNavigationPaneCollapsed;
+            private set
+            {
+                if (_isNavigationPaneCollapsed == value) return;
+                _isNavigationPaneCollapsed = value;
+                OnPropertyChanged(nameof(IsNavigationPaneCollapsed));
+                OnPropertyChanged(nameof(NavigationPaneWidth));
+            }
+        }
+
+        public System.Windows.GridLength NavigationPaneWidth =>
+            new(IsNavigationPaneCollapsed ? 72 : 280, System.Windows.GridUnitType.Pixel);
 
         public MainWindowViewModel()
         {
             OpenImageCommand = new RelayCommand(ExecuteOpenImageCommand);
+            ImportCommand = new RelayCommand(_ => ExecuteImportCommandAsync());
             SaveLayoutCommand = new RelayCommand(ExecuteSaveLayoutCommand);
             LoadLayoutCommand = new RelayCommand(ExecuteLoadLayoutCommand);
             AddLocalFolderCommand = new RelayCommand(ExecuteAddLocalFolderCommand);
-            AddOneDriveAccountCommand = new RelayCommand(ExecuteAddOneDriveAccountCommandAsync);
             ToggleFavoriteCommand = new RelayCommand(ExecuteToggleFavoriteCommand);
             RemoveSourceCommand = new RelayCommand(ExecuteRemoveSourceCommand, CanExecuteRemoveSourceCommand);
-            AddGoogleDriveAccountCommand = new RelayCommand(ExecuteAddGoogleDriveAccountCommandAsync);
             OpenSettingsCommand = new RelayCommand(ExecuteOpenSettingsCommand);
+            ClearSearchCommand = new RelayCommand(_ => SearchText = string.Empty);
+            EnterSelectionModeCommand = new RelayCommand(_ => IsSelectionMode = true);
+            SelectAllCommand = new RelayCommand(_ => SelectAllPhotos());
+            SelectNoneCommand = new RelayCommand(_ => SelectNonePhotos());
+            CancelSelectionCommand = new RelayCommand(_ => CancelSelection());
+            ToggleSelectedFavoritesCommand = new RelayCommand(_ => ToggleSelectedFavorites());
+            RetryLoadCommand = new RelayCommand(_ => ReloadCurrentSource());
+            DeleteSelectedCommand = new RelayCommand(_ => DeleteSelectedPhotos());
+            CopySelectedCommand = new RelayCommand(_ => CopySelectedPhotos());
+            OpenWithSelectedCommand = new RelayCommand(_ => OpenWithSelectedPhoto());
+            MoveSelectedCommand = new RelayCommand(_ => MoveSelectedPhotos());
+            ToggleNavigationCommand = new RelayCommand(_ => IsNavigationPaneCollapsed = !IsNavigationPaneCollapsed);
 
             _layoutService = new LayoutService();
             _photoWindowSizeService = new PhotoWindowSizeService();
             _mainWindowSizeService = new MainWindowSizeService();
-            _oneDriveAuthService = new OneDriveAuthenticationService();
-            _googleAuthService = new GoogleAuthenticationService();
             _favoritesService = new FavoritesService();
             _historyService = new HistoryService();
             _sourcePersistenceService = new SourcePersistenceService();
@@ -221,11 +451,229 @@ namespace PhotoViewer.ViewModels
             // Load saved settings
             var settings = _settingsService.LoadSettings();
             _selectedTheme = settings.Theme;
+            _selectedSortOption = settings.SortOption switch
+            {
+                "Date taken" or "Date created" or "Date modified" or "Name" or "File size" => settings.SortOption,
+                "File Name" => "Name",
+                "Date Created" => "Date created",
+                "File Size" => "File size",
+                _ => "Name"
+            };
+            _selectedSortDirection = SortDirections.Contains(settings.SortDirection) ? settings.SortDirection : "Ascending";
+            _selectedMediaType = MediaTypeOptions.Contains(settings.MediaType) ? settings.MediaType : "All media";
+            _thumbnailRowHeight = ThumbnailSizeOptions.Contains(settings.ThumbnailRowHeight) ? settings.ThumbnailRowHeight : 180;
+            _confirmDelete = settings.ConfirmDelete;
+            _mouseWheelZoom = settings.MouseWheelZoom;
+            _showFileLocation = settings.ShowFileLocation;
+            _allowAnonymousDiagnostics = settings.AllowAnonymousDiagnostics;
+            _personalizedExperiences = settings.PersonalizedExperiences;
+            _reduceMotion = settings.ReduceMotion;
+            _defaultViewerZoom = ViewerZoomOptions.Contains(settings.DefaultViewerZoom) ? settings.DefaultViewerZoom : 1.0;
 
             _photos = new RangeObservableCollection<PhotoItemViewModel>();
             PhotosView = CollectionViewSource.GetDefaultView(_photos);
             PhotosView.Filter = FilterPhotos;
+            _photos.CollectionChanged += (_, _) =>
+            {
+                UpdateDuplicateIndicators();
+                UpdateDateGrouping();
+                OnPropertyChanged(nameof(HasNoSearchResults));
+                OnPropertyChanged(nameof(HasNoResults));
+                OnPropertyChanged(nameof(PhotoSummary));
+                OnPropertyChanged(nameof(DateRangeSummary));
+            };
+            _searchDebounceTimer.Tick += (_, _) =>
+            {
+                _searchDebounceTimer.Stop();
+                PhotosView.Refresh();
+                UpdateDateGrouping();
+                OnPropertyChanged(nameof(HasNoSearchResults));
+                OnPropertyChanged(nameof(HasNoResults));
+            };
             ApplySort();
+        }
+
+        public void NotifySelectionChanged()
+        {
+            OnPropertyChanged(nameof(SelectedPhotoCount));
+        }
+
+        private void SelectAllPhotos()
+        {
+            PhotoSelectionService.SelectAll(_photos);
+            NotifySelectionChanged();
+        }
+
+        private void UpdateDuplicateIndicators()
+        {
+            var duplicateNames = _photos
+                .GroupBy(photo => photo.Photo.FileName, StringComparer.OrdinalIgnoreCase)
+                .Where(group => group.Count() > 1)
+                .Select(group => group.Key)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var photo in _photos)
+                photo.IsDuplicate = duplicateNames.Contains(photo.Photo.FileName);
+        }
+
+        private void CancelSelection()
+        {
+            SelectNonePhotos();
+            IsSelectionMode = false;
+        }
+
+        private void SelectNonePhotos()
+        {
+            PhotoSelectionService.Clear(_photos);
+            NotifySelectionChanged();
+        }
+
+        private void ToggleSelectedFavorites()
+        {
+            var selected = _photos.Where(photo => photo.IsSelected).ToList();
+            if (selected.Count == 0) return;
+
+            var shouldFavorite = selected.Any(photo => !photo.IsFavorite);
+            foreach (var photo in selected)
+            {
+                photo.IsFavorite = shouldFavorite;
+                if (shouldFavorite)
+                    _favoritesService.AddFavorite(photo.Photo.FilePath);
+                else
+                    _favoritesService.RemoveFavorite(photo.Photo.FilePath);
+            }
+
+            _ = UpdateFavoritesCountAsync();
+        }
+
+        private List<PhotoItemViewModel> GetSelectedPhotos() => _photos.Where(photo => photo.IsSelected).ToList();
+
+        private List<PhotoItemViewModel> GetSelectedLocalPhotos() => GetSelectedPhotos()
+            .Where(photo => File.Exists(photo.Photo.FilePath)).ToList();
+
+        private IProviderCapabilities SelectedProviderCapabilities => SelectedSource switch
+        {
+            FolderSourceViewModel folder => folder.Capabilities,
+            SourceItemViewModel source => source.Capabilities,
+            _ => new ProviderCapabilitySet(false, false, false, false, false, true)
+        };
+
+        private void DeleteSelectedPhotos()
+        {
+            var selected = GetSelectedPhotos();
+            var localPhotos = selected.Where(photo => File.Exists(photo.Photo.FilePath)).ToList();
+            if (!SelectedProviderCapabilities.CanDelete || localPhotos.Count == 0)
+            {
+                System.Windows.MessageBox.Show("Delete is unavailable for the selected provider items.", "Delete", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var settings = _settingsService.LoadSettings();
+            if (settings.ConfirmDelete)
+            {
+                var result = MessageBox.Show($"Move {localPhotos.Count} item(s) to the Recycle Bin?", "Delete photos",
+                    MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                if (result != MessageBoxResult.Yes) return;
+            }
+
+            foreach (var photo in localPhotos)
+            {
+                try
+                {
+                    FileSystem.DeleteFile(photo.Photo.FilePath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                    _photos.Remove(photo);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Bulk delete failed for {photo.Photo.FilePath}: {ex.Message}");
+                }
+            }
+
+            if (selected.Count > localPhotos.Count)
+                LoadWarningMessage = "Some selected items are unavailable for local deletion.";
+            CancelSelection();
+        }
+
+        private void CopySelectedPhotos()
+        {
+            var localPhotos = GetSelectedLocalPhotos();
+            if (localPhotos.Count == 0)
+            {
+                MessageBox.Show("Copy is unavailable for the selected provider items.", "Copy", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var paths = new StringCollection();
+            foreach (var photo in localPhotos) paths.Add(photo.Photo.FilePath);
+            Clipboard.SetFileDropList(paths);
+            if (localPhotos.Count < GetSelectedPhotos().Count)
+                LoadWarningMessage = "Only local files were copied to the clipboard.";
+        }
+
+        private void OpenWithSelectedPhoto()
+        {
+            var photo = GetSelectedLocalPhotos().FirstOrDefault();
+            if (photo == null)
+            {
+                MessageBox.Show("Open with is unavailable for the selected provider items.", "Open with", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "rundll32.exe",
+                Arguments = $"shell32.dll,OpenAs_RunDLL \"{photo.Photo.FilePath}\"",
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+        }
+
+        private void MoveSelectedPhotos()
+        {
+            var localPhotos = GetSelectedLocalPhotos();
+            if (!SelectedProviderCapabilities.CanMove || localPhotos.Count == 0)
+            {
+                MessageBox.Show("Move is unavailable for the selected provider items.", "Move", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            using var dialog = new System.Windows.Forms.FolderBrowserDialog
+            {
+                Description = "Choose a destination folder",
+                UseDescriptionForTitle = true,
+                ShowNewFolderButton = true
+            };
+            if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+
+            foreach (var photo in localPhotos)
+            {
+                try
+                {
+                    var destination = GetUniqueDestinationPath(dialog.SelectedPath, photo.Photo.FileName);
+                    File.Move(photo.Photo.FilePath, destination);
+                    _photos.Remove(photo);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Bulk move failed for {photo.Photo.FilePath}: {ex.Message}");
+                }
+            }
+            CancelSelection();
+        }
+
+        private static string GetUniqueDestinationPath(string folder, string fileName)
+        {
+            var path = Path.Combine(folder, fileName);
+            if (!File.Exists(path)) return path;
+
+            var name = Path.GetFileNameWithoutExtension(fileName);
+            var extension = Path.GetExtension(fileName);
+            var index = 2;
+            do
+            {
+                path = Path.Combine(folder, $"{name} ({index++}){extension}");
+            } while (File.Exists(path));
+            return path;
         }
 
         public async Task InitializeAsync()
@@ -235,7 +683,7 @@ namespace PhotoViewer.ViewModels
                 AddDefaultSources();
                 LoadPersistedSources();
 
-                if (Sources.OfType<SourceItemViewModel>().Count(s => s.Provider is not FavoritesProvider and not RecentlyViewedProvider) == 0)
+                if (Sources.OfType<FolderSourceViewModel>().Count() == 0)
                 {
                     await AddDefaultPicturesFolderAsync();
                 }
@@ -318,6 +766,7 @@ namespace PhotoViewer.ViewModels
             var recentlyViewedProvider = new RecentlyViewedProvider(_historyService);
             var recentlyViewedSource = new SourceItemViewModel(recentlyViewedProvider) { DisplayName = "Recently Viewed" };
             CollectionSources.Add(recentlyViewedSource);
+
         }
 
         private void ExecuteSaveLayoutCommand(object? parameter)
@@ -558,75 +1007,6 @@ namespace PhotoViewer.ViewModels
                             folderViewModelsToCount.Add(newSource);
                         }
                     }
-                    else if (config.Type == "OneDrive")
-                    {
-                        if (string.IsNullOrWhiteSpace(config.Path)) continue;
-
-                        // This part remains async for now due to silent authentication
-                        _ = Task.Run(async () =>
-                        {
-                            try
-                            {
-                                var authResult = await _oneDriveAuthService.SignInSilentlyAsync(config.Path);
-                                if (authResult != null)
-                                {
-                                    var oneDriveProvider = new OneDriveProvider(authResult);
-                                    if (!Sources.OfType<OneDriveSourceViewModel>().Any(s => s.AccountId == authResult.Account.HomeAccountId.Identifier))
-                                    {
-                                        var newSource = new OneDriveSourceViewModel(oneDriveProvider)
-                                        {
-                                            DisplayName = config.DisplayName,
-                                            AccountId = authResult.Account.HomeAccountId.Identifier
-                                        };
-                                        System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                                        {
-                                            Sources.Add(newSource);
-                                            UserSources.Add(newSource);
-                                        });
-                                    }
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Debug.WriteLine($"Error loading OneDrive source: {ex}");
-                            }
-                        });
-                    }
-                    else if (config.Type == "GoogleDrive")
-                    {
-                        if (string.IsNullOrWhiteSpace(config.Path)) continue;
-
-                        // This part remains async for now due to silent authentication
-                        _ = Task.Run(async () =>
-                        {
-                            try
-                            {
-                                var credential = await _googleAuthService.SignInInteractivelyAsync();
-                                if (credential != null && credential.UserId == config.Path)
-                                {
-                                    var googleDriveProvider = new GoogleDriveProvider(credential);
-                                    if (!Sources.OfType<GoogleDriveSourceViewModel>().Any(s => s.UserId == credential.UserId))
-                                    {
-                                        var newSource = new GoogleDriveSourceViewModel(googleDriveProvider)
-                                        {
-                                            DisplayName = config.DisplayName,
-                                            UserId = credential.UserId
-                                        };
-                                        System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                                        {
-                                            Sources.Add(newSource);
-                                            UserSources.Add(newSource);
-                                        });
-                                    }
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Debug.WriteLine($"Error loading GoogleDrive source: {ex}");
-                                // Ignore if authentication fails
-                            }
-                        });
-                    }
                 }
                 catch (Exception ex)
                 {
@@ -655,26 +1035,6 @@ namespace PhotoViewer.ViewModels
                             DisplayName = fsv.DisplayName
                         });
                     }
-                    else if (source is SourceItemViewModel svm && svm.Provider is OneDriveProvider)
-                    {
-                        var odsvm = (OneDriveSourceViewModel)source;
-                        configsToSave.Add(new SourceConfig
-                        {
-                            Type = "OneDrive",
-                            Path = odsvm.AccountId,
-                            DisplayName = svm.DisplayName
-                        });
-                    }
-                    else if (source is SourceItemViewModel svm2 && svm2.Provider is GoogleDriveProvider)
-                    {
-                        var gdsvm = (GoogleDriveSourceViewModel)source;
-                        configsToSave.Add(new SourceConfig
-                        {
-                            Type = "GoogleDrive",
-                            Path = gdsvm.UserId,
-                            DisplayName = svm2.DisplayName
-                        });
-                    }
                 }
                 _sourcePersistenceService.SaveSources(configsToSave);
             }
@@ -686,32 +1046,36 @@ namespace PhotoViewer.ViewModels
 
         private bool FilterPhotos(object item)
         {
-            if (string.IsNullOrEmpty(SearchText))
-            {
-                return true;
-            }
-
-            if (item is PhotoItemViewModel vm)
-            {
-                return vm.Photo.FileName.Contains(SearchText, StringComparison.OrdinalIgnoreCase);
-            }
-
-            return false;
+            if (item is not PhotoItemViewModel vm) return false;
+            return PhotoQueryMatcher.Matches(vm, SelectedMediaType, SearchText);
         }
 
         private void ApplySort()
         {
             PhotosView.SortDescriptions.Clear();
 
-            string propertyName = _selectedSortOption switch
-            {
-                "Date Created" => $"{nameof(PhotoItemViewModel.Photo)}.{nameof(PhotoItem.CreationDate)}",
-                "File Size" => $"{nameof(PhotoItemViewModel.Photo)}.{nameof(PhotoItem.FileSizeInBytes)}",
-                _ => $"{nameof(PhotoItemViewModel.Photo)}.{nameof(PhotoItem.FileName)}",
-            };
-
-            var direction = _selectedSortDirection == "Ascending" ? ListSortDirection.Ascending : ListSortDirection.Descending;
+            var propertyName = PhotoSortDescriptor.GetPropertyName(_selectedSortOption);
+            var direction = PhotoSortDescriptor.GetDirection(_selectedSortDirection);
             PhotosView.SortDescriptions.Add(new SortDescription(propertyName, direction));
+            UpdateDateGrouping();
+        }
+
+        private void UpdateDateGrouping()
+        {
+            var dateSorting = _selectedSortOption is "Date taken" or "Date created" or "Date modified";
+            foreach (var photo in _photos)
+                photo.SetDateGroupLabel(string.Empty);
+            if (!dateSorting) return;
+
+            string? previousKey = null;
+            foreach (var photo in PhotosView.Cast<PhotoItemViewModel>())
+            {
+                var date = PhotoSortDescriptor.GetGroupingDate(photo.Photo, _selectedSortOption);
+                var key = PhotoDateGrouping.GetKey(date);
+                if (key == previousKey) continue;
+                photo.SetDateGroupLabel(PhotoDateGrouping.GetLabel(date));
+                previousKey = key;
+            }
         }
 
         private void ExecuteToggleFavoriteCommand(object? parameter)
@@ -745,18 +1109,29 @@ namespace PhotoViewer.ViewModels
 
         private bool CanExecuteRemoveSourceCommand(object? parameter)
         {
-            return parameter is SourceItemViewModel { Provider: LocalFolderProvider or OneDriveProvider or GoogleDriveProvider }
+            return parameter is SourceItemViewModel { Provider: LocalFolderProvider }
                 or FolderSourceViewModel;
         }
 
         private void ExecuteRemoveSourceCommand(object? parameter)
         {
+            if (parameter is not SourceItemViewModel and not FolderSourceViewModel) return;
+
+            var sourceName = parameter switch
+            {
+                SourceItemViewModel source => source.DisplayName,
+                FolderSourceViewModel folder => folder.DisplayName,
+                _ => "this source"
+            };
+            var confirmation = System.Windows.MessageBox.Show(
+                $"Remove {sourceName} from PhotoViewer? Files will not be deleted.",
+                "Remove source", System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Question);
+            if (confirmation != System.Windows.MessageBoxResult.Yes) return;
+
             if (parameter is FolderSourceViewModel fsv)
             {
                 fsv.Dispose();
             }
-
-            if (parameter is not SourceItemViewModel and not FolderSourceViewModel) return;
 
             if (SelectedSource == parameter)
             {
@@ -782,6 +1157,7 @@ namespace PhotoViewer.ViewModels
                 {
                     DataContext = photoWindowViewModel
                 };
+                photoWindow.SetNavigationItems(PhotosView.Cast<PhotoItemViewModel>().Select(photo => photo.Photo.FilePath));
 
                 // Apply saved window size
                 var savedSize = _photoWindowSizeService.LoadSize();
@@ -828,6 +1204,12 @@ namespace PhotoViewer.ViewModels
 
         private void ExecuteAddLocalFolderCommand(object? parameter)
         {
+            if (parameter is string droppedFolder && Directory.Exists(droppedFolder))
+            {
+                AddLocalFolderSource(droppedFolder);
+                return;
+            }
+
             using var dialog = new System.Windows.Forms.FolderBrowserDialog
             {
                 Description = "Select a folder to add to the gallery",
@@ -837,62 +1219,22 @@ namespace PhotoViewer.ViewModels
 
             if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
-                var folderPath = dialog.SelectedPath;
-                if (!Sources.Any(s => s is FolderSourceViewModel fsv && fsv.Provider.SourceName.Equals(folderPath, StringComparison.OrdinalIgnoreCase)))
-                {
-                    var provider = new LocalFolderProvider(folderPath);
-                    var newSource = new FolderSourceViewModel(provider);
-                    Sources.Add(newSource);
-                    UserSources.Add(newSource);
-                    SelectedSource = newSource;
-                    PersistSources();
-                }
+                AddLocalFolderSource(dialog.SelectedPath);
             }
         }
 
-        private async void ExecuteAddOneDriveAccountCommandAsync(object? parameter)
+        private void AddLocalFolderSource(string folderPath)
         {
-            var authResult = await _oneDriveAuthService.SignInInteractivelyAsync();
-            if (authResult != null)
-            {
-                var oneDriveProvider = new OneDriveProvider(authResult);
-                var newSource = new OneDriveSourceViewModel(oneDriveProvider)
-                {
-                    DisplayName = $"OneDrive ({authResult.Account.Username})",
-                    AccountId = authResult.Account.HomeAccountId.Identifier
-                };
-                Sources.Add(newSource);
-                UserSources.Add(newSource);
-                SelectedSource = newSource;
-                PersistSources();
-            }
-            else
-            {
-                System.Windows.MessageBox.Show("Authentication failed or was canceled.", "Authentication Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
-            }
-        }
+            if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath)) return;
+            if (Sources.Any(s => s is FolderSourceViewModel fsv &&
+                                 fsv.Provider.SourceName.Equals(folderPath, StringComparison.OrdinalIgnoreCase))) return;
 
-        private async void ExecuteAddGoogleDriveAccountCommandAsync(object? parameter)
-        {
-            try
-            {
-                var credential = await _googleAuthService.SignInInteractivelyAsync();
-                if (credential != null)
-                {
-                    var googleDriveProvider = new GoogleDriveProvider(credential);
-                    var newSource = new GoogleDriveSourceViewModel(googleDriveProvider)
-                    {
-                        DisplayName = $"Google Drive ({credential.UserId})",
-                        UserId = credential.UserId
-                    };
-                    Sources.Add(newSource);
-                    UserSources.Add(newSource);
-                    SelectedSource = newSource;
-                    PersistSources();
-                }
-            }
-            catch (Exception ex)
-            { System.Windows.MessageBox.Show($"Google authentication failed: {ex.Message}", "Authentication Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error); }
+            var provider = new LocalFolderProvider(folderPath);
+            var newSource = new FolderSourceViewModel(provider);
+            Sources.Add(newSource);
+            UserSources.Add(newSource);
+            SelectedSource = newSource;
+            PersistSources();
         }
 
         private async void LoadPhotosForSelectedSourceAsync()
@@ -902,6 +1244,8 @@ namespace PhotoViewer.ViewModels
             var cancellationToken = _photoLoadingCts.Token;
 
             IsLoading = true;
+            LoadErrorMessage = string.Empty;
+            LoadWarningMessage = string.Empty;
 
             try
             {
@@ -947,16 +1291,23 @@ namespace PhotoViewer.ViewModels
                     {
                         // Expected - user switched sources
                     }
+                    catch (Exception ex)
+                    {
+                        LoadErrorMessage = $"Unable to load {folderSource.DisplayName}: {ex.Message}";
+                    }
                     return;
                 }
 
-                // For other source types (OneDrive, Google Drive, Favorites, Recently Viewed)
+                // For built-in collection sources (Favorites and Recently Viewed)
                 if (_selectedSource is not SourceItemViewModel { Provider: IPhotoProvider provider }) return;
 
+                var sourceViewModel = (SourceItemViewModel)_selectedSource;
+
                 string sourceKey = $"source:{_selectedSource.GetHashCode()}";
-                if (TryLoadFromCache(sourceKey, out var sourceItems) && !sourceItems.IsStale())
-                {
-                    DisplayCachedItemsInstantly(sourceItems);
+                    if (TryLoadFromCache(sourceKey, out var sourceItems) && !sourceItems.IsStale())
+                    {
+                        DisplayCachedItemsInstantly(sourceItems);
+                        sourceViewModel.MarkLoadSucceeded();
                     // Refresh in background
                     _ = RefreshSourceCacheAsync(sourceKey, () => LoadSourcePhotosInternalAsync(provider, cancellationToken));
                     return;
@@ -967,6 +1318,7 @@ namespace PhotoViewer.ViewModels
                     var photoItems = await provider.GetPhotoPathsAsync(cancellationToken);
                     if (cancellationToken.IsCancellationRequested) return;
                     await LoadPhotoItemsAsync(photoItems, sourceKey, cancellationToken);
+                    sourceViewModel.MarkLoadSucceeded();
                 }
                 catch (TaskCanceledException)
                 {
@@ -978,12 +1330,87 @@ namespace PhotoViewer.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    System.Windows.MessageBox.Show($"Error loading photos: {ex.Message}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                    sourceViewModel.MarkLoadFailed(ex);
+                    OnPropertyChanged(nameof(LoadErrorTitle));
+                    LoadErrorMessage = $"Unable to load {(_selectedSource as SourceItemViewModel)?.DisplayName ?? "this source"}: {ex.Message}";
                 }
             }
             finally
             {
                 IsLoading = false;
+            }
+        }
+
+        private async void ExecuteImportCommandAsync()
+        {
+            var openFileDialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Choose photos to import",
+                Filter = "Photos and videos|*.jpg;*.jpeg;*.png;*.bmp;*.gif;*.mp4;*.mov;*.avi;*.mkv;*.webm|All files (*.*)|*.*",
+                Multiselect = true,
+                CheckFileExists = true
+            };
+            if (openFileDialog.ShowDialog() != true) return;
+
+            var selectionWindow = new ImportSelectionWindow(openFileDialog.FileNames)
+            {
+                Owner = System.Windows.Application.Current.Windows.OfType<MainWindow>().FirstOrDefault()
+            };
+            if (selectionWindow.ShowDialog() != true) return;
+            var selectedFiles = selectionWindow.SelectedPaths.ToList();
+
+            using var destinationDialog = new System.Windows.Forms.FolderBrowserDialog
+            {
+                Description = "Choose a destination folder for the imported items",
+                UseDescriptionForTitle = true,
+                ShowNewFolderButton = true
+            };
+            if (destinationDialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+
+            var destination = destinationDialog.SelectedPath;
+            var conflicts = selectedFiles.Count(path => File.Exists(Path.Combine(destination, Path.GetFileName(path))));
+            if (conflicts > 0)
+            {
+                var result = System.Windows.MessageBox.Show(
+                    $"{conflicts} item(s) already exist in the destination. Existing files will be skipped.",
+                    "Duplicate files", System.Windows.MessageBoxButton.OKCancel, System.Windows.MessageBoxImage.Information);
+                if (result != System.Windows.MessageBoxResult.OK) return;
+            }
+
+            using var progressWindow = new ImportProgressWindow(selectedFiles.Count);
+            progressWindow.Owner = System.Windows.Application.Current.Windows.OfType<MainWindow>().FirstOrDefault();
+            progressWindow.Show();
+
+            ImportCopySummary summary = default;
+            try
+            {
+                var progress = new Progress<ImportCopyProgress>(update =>
+                    progressWindow.UpdateProgress(update.Index, update.FileName));
+                summary = await new ImportCopyService().CopyAsync(
+                    selectedFiles, destination, progress, progressWindow.CancellationToken);
+            }
+            finally
+            {
+                progressWindow.Close();
+            }
+
+            var canceled = summary.Canceled;
+            var failedDetails = summary.FailedFiles.Count > 0
+                ? $"\nFailed files: {string.Join(", ", summary.FailedFiles.Take(8))}{(summary.FailedFiles.Count > 8 ? ", ..." : string.Empty)}"
+                : string.Empty;
+            System.Windows.MessageBox.Show(
+                $"Imported: {summary.Imported}\nSkipped duplicates: {summary.Skipped}\nFailed: {summary.Failed}{failedDetails}" + (canceled ? "\nThe import was canceled." : string.Empty),
+                "Import complete", System.Windows.MessageBoxButton.OK,
+                summary.Failed > 0 ? System.Windows.MessageBoxImage.Warning : System.Windows.MessageBoxImage.Information);
+
+            if (summary.Imported > 0)
+            {
+                var existingFolder = Sources.OfType<FolderSourceViewModel>()
+                    .FirstOrDefault(source => string.Equals(source.Provider.SourceName, destination, StringComparison.OrdinalIgnoreCase));
+                if (existingFolder != null)
+                    SelectedSource = existingFolder;
+                else
+                    AddLocalFolderSource(destination);
             }
         }
 
@@ -1020,9 +1447,8 @@ namespace PhotoViewer.ViewModels
         private async Task LoadGalleryPhotosInternalAsync(CancellationToken cancellationToken)
         {
             var allProviders = Sources
-                .OfType<SourceItemViewModel>()
-                .Where(s => s.DisplayName != "Gallery" && s.DisplayName != "Favorites" && s.DisplayName != "Recently Viewed")
-                .Select(s => s.Provider)
+                .OfType<FolderSourceViewModel>()
+                .Select(s => (IPhotoProvider)s.Provider)
                 .ToList();
 
             if (!allProviders.Any()) return;
@@ -1058,6 +1484,7 @@ namespace PhotoViewer.ViewModels
             var flushTimer = System.Diagnostics.Stopwatch.StartNew();
 
             // Process providers SEQUENTIALLY
+            var failedProviders = new List<string>();
             foreach (var provider in providers)
             {
                 if (cancellationToken.IsCancellationRequested) break;
@@ -1066,38 +1493,18 @@ namespace PhotoViewer.ViewModels
                 try
                 {
                     if (provider is LocalFolderProvider localProvider)
-                    {
                         await ProcessLocalProviderSequentiallyAsync(localProvider, allItems, allViewModels, allFilePaths,
                             uiUpdateQueue, displayCounter, maxCacheSize, batchSize, cancellationToken, flushTimer);
-                    }
-                    else
-                    {
-                        // For cloud providers, get items and add them
-                        var items = await provider.GetPhotoPathsAsync(cancellationToken);
-                        if (cancellationToken.IsCancellationRequested) return;
-
-                        var itemList = items.Take(maxCacheSize - allViewModels.Count).ToList();
-                        var batchViewModels = itemList.Select(item => new PhotoItemViewModel(item) { IsFavorite = _favoritesService.IsFavorite(item.FilePath) }).ToList();
-
-                        allItems.AddRange(itemList);
-                        allViewModels.AddRange(batchViewModels);
-                        allFilePaths.UnionWith(itemList.Select(x => x.FilePath));
-
-                        // Queue ALL items
-                        foreach (var vm in batchViewModels)
-                        {
-                            uiUpdateQueue.Enqueue(vm);
-                            displayCounter.Count++;
-                        }
-
-                        await FlushUIQueueAsync(uiUpdateQueue, cancellationToken);
-                    }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Skip provider if it fails
+                    failedProviders.Add(provider.SourceName);
+                    Debug.WriteLine($"Gallery provider failed: {provider.SourceName}: {ex.Message}");
                 }
             }
+
+            if (failedProviders.Count > 0)
+                LoadWarningMessage = $"Some sources could not be loaded: {string.Join(", ", failedProviders)}";
 
             // Final flush
             await FlushUIQueueAsync(uiUpdateQueue, cancellationToken);
@@ -1549,15 +1956,6 @@ namespace PhotoViewer.ViewModels
                 allProviders.Add(source.Provider);
             }
 
-            // Collect providers from cloud sources (OneDrive, Google Drive, etc.)
-            foreach (var source in Sources.OfType<SourceItemViewModel>())
-            {
-                if (source.DisplayName != "Gallery" && source.DisplayName != "Favorites" && source.DisplayName != "Recently Viewed")
-                {
-                    allProviders.Add(source.Provider);
-                }
-            }
-
             if (!allProviders.Any())
             {
                 var gallerySource = CollectionSources.FirstOrDefault(s => s.DisplayName == "Gallery");
@@ -1577,8 +1975,27 @@ namespace PhotoViewer.ViewModels
 
         public void ApplyTheme()
         {
-            _settingsService.SaveSettings(new AppSettings { Theme = _selectedTheme });
+            SaveGalleryPreferences();
             ThemeManager.ApplyTheme(_selectedTheme);
+        }
+
+        private void SaveGalleryPreferences()
+        {
+            _settingsService.SaveSettings(new AppSettings
+            {
+                Theme = _selectedTheme,
+                SortOption = _selectedSortOption,
+                SortDirection = _selectedSortDirection,
+                MediaType = _selectedMediaType,
+                ThumbnailRowHeight = _thumbnailRowHeight,
+                ConfirmDelete = _confirmDelete,
+                MouseWheelZoom = _mouseWheelZoom,
+                ShowFileLocation = _showFileLocation,
+                AllowAnonymousDiagnostics = _allowAnonymousDiagnostics,
+                PersonalizedExperiences = _personalizedExperiences,
+                ReduceMotion = _reduceMotion,
+                DefaultViewerZoom = _defaultViewerZoom
+            });
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

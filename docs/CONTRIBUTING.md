@@ -12,4 +12,4 @@ Before substantial changes, open an issue or discuss the intended behavior with 
 
 ## Pull requests
 
-Describe the user-visible result, affected sources or integrations, verification performed, and any configuration required by reviewers. Do not include OAuth secrets, token files, or machine-specific paths.
+Describe the user-visible result, affected sources or integrations, verification performed, and any configuration required by reviewers. Do not include machine-specific paths or local data.

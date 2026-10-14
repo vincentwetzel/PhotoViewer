@@ -26,6 +26,13 @@ namespace PhotoViewer.Services
                 resources["BorderBrush"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(60, 60, 60));
                 resources["MenuBackground"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(30, 30, 30));
                 resources["ListItemHover"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(60, 60, 60));
+                resources["AccentBrush"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(96, 165, 250));
+                resources["AccentForeground"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(20, 20, 20));
+                resources["SubtleTextForeground"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(185, 185, 185));
+                resources["SelectedBackground"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(55, 82, 105));
+                resources["FocusBorder"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(96, 165, 250));
+                resources["CardBackground"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(37, 37, 37));
+                resources["ViewerBackground"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(17, 17, 17));
                 
                 // Dark scrollbar colors
                 resources[System.Windows.SystemColors.ControlBrushKey] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(60, 60, 60));
@@ -48,6 +55,13 @@ namespace PhotoViewer.Services
                 resources["BorderBrush"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 220, 220));
                 resources["MenuBackground"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255));
                 resources["ListItemHover"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(240, 240, 240));
+                resources["AccentBrush"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(15, 108, 189));
+                resources["AccentForeground"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255));
+                resources["SubtleTextForeground"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(102, 102, 102));
+                resources["SelectedBackground"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(221, 235, 247));
+                resources["FocusBorder"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(15, 108, 189));
+                resources["CardBackground"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255));
+                resources["ViewerBackground"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(17, 17, 17));
                 
                 // Light scrollbar colors
                 resources[System.Windows.SystemColors.ControlBrushKey] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(200, 200, 200));

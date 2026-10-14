@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Template only: replace identity, publisher, version, and executable details in the packaging pipeline. -->
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         IgnorableNamespaces="uap">
+  <Identity Name="YOUR_PACKAGE_ID"
+            Publisher="CN=YOUR_PUBLISHER"
+            Version="1.0.0.0" />
+  <Properties>
+    <DisplayName>PhotoViewer</DisplayName>
+    <PublisherDisplayName>PhotoViewer</PublisherDisplayName>
+    <Description>Photos-inspired media gallery</Description>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+  <Applications>
+    <Application Id="PhotoViewer"
+                 Executable="PhotoViewer.exe"
+                 EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements AppListEntry="default"
+                          DisplayName="PhotoViewer"
+                          Description="Photos-inspired media gallery"
+                          Square150x150Logo="Assets\Square150x150Logo.png"
+                          Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <uap:Extension Category="windows.fileTypeAssociation">
+          <uap:FileTypeAssociation Name="photo-viewer-media" Description="PhotoViewer media files">
+            <uap:SupportedFileTypes>
+              <FileType>.jpg</FileType>
+              <FileType>.jpeg</FileType>
+              <FileType>.png</FileType>
+              <FileType>.bmp</FileType>
+              <FileType>.gif</FileType>
+              <FileType>.mp4</FileType>
+              <FileType>.mov</FileType>
+              <FileType>.avi</FileType>
+              <FileType>.mkv</FileType>
+              <FileType>.webm</FileType>
+            </uap:SupportedFileTypes>
+          </uap:FileTypeAssociation>
+        </uap:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+</Package>

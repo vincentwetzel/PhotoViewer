@@ -35,7 +35,9 @@ token.json
 # Logs and test results
 *.log
 TestResults/
-.build-temp/
+.build/
 
 # Test/scratch files
 Test*.cs
+
+/reference-images*
